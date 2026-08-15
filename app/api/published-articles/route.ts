@@ -8,7 +8,7 @@ export async function GET() {
   try {
     const { data, error } = await supabase
       .from('articles')
-      .select('title, source, thumbnail_url, created_at')
+      .select('title, source, thumbnail_url, created_at, tags')
       .eq('published', true)
       .order('created_at', { ascending: false });
 
@@ -17,7 +17,15 @@ export async function GET() {
       return NextResponse.json({ articles: [] });
     }
 
-    return NextResponse.json({ articles: data });
+    // Ensure tags are always an array of lowercase strings
+    const articles = (data || []).map(article => ({
+      ...article,
+      tags: Array.isArray(article.tags) 
+        ? article.tags.map(t => String(t).toLowerCase()) 
+        : (typeof article.tags === 'string' ? article.tags.split(',').map(t => t.trim().toLowerCase()) : [])
+    }));
+
+    return NextResponse.json({ articles });
   } catch (error) {
     console.error('Server Error:', error);
     return NextResponse.json({ articles: [] });

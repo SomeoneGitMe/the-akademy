@@ -1,36 +1,25 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+The Akademy — Sovereign Media Infrastructure
+A custom, AI-driven media platform built to replace standard CMS environments. It auto-generates SEO articles from RSS feeds, tracks Billboard charts, and hosts an uncensored video vault. No algorithms, no demonetization—100% first-party data ownership.
 
-## Getting Started
+Live Demo URL
+[Insert Vercel Link Here]
 
-First, run the development server:
+How It Works
+RSS Aggregation: Ingests trending news from major hip-hop/entertainment outlets.
+AI Engine (Groq): Uses Llama 3.3 (70B) via Groq API to auto-generate 6-paragraph, SEO-optimized articles with Key Takeaways in JSON format.
+Custom CMS: A "Noir Desk" admin dashboard for editors to crop thumbnails, add SEO tags, and push to public.
+Edge Delivery: Built on Next.js App Router for instant static regeneration (ISR) and global CDN caching.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+Tech Stack
+Frontend: Next.js, React, Tailwind CSS, Fira Code, EB Garamond.
+Backend: Node.js, Next.js Server Actions / API Routes.
+Database & Auth: Supabase (PostgreSQL, Row Level Security, Auth, Storage).
+AI Models: Groq (Llama 3.3-70b-versatile).
+Styling: Custom "Noir" design system (Crimson Red / Dark Steel).
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Engineering Highlights
+RBAC: Role-Based Access Control (Admin, Editor, User) built natively into Supabase Auth and Next.js middleware.
+Bulletproof Prompting: Groq API forced to output strict JSON formatting for reliable article generation.
+Optimistic UI: Client-side state management for instant tag inputs, image uploads, and draft saving.
+Scalable CDN: Architecture designed to handle 25k+ concurrent viewers via Vercel Edge and Amazon IVS integration.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.

@@ -21,21 +21,24 @@ export async function POST(req: NextRequest) {
       .eq('title', title)
       .maybeSingle();
 
-    if (existingArticle && existingArticle.content) {
+    // EDGE CASE FIX: If it exists and is published, DO NOT overwrite.
+    if (existingArticle && existingArticle.published) {
+      const parsedContent = JSON.parse(existingArticle.content);
       return NextResponse.json({ 
-        ...JSON.parse(existingArticle.content), 
+        ...parsedContent, 
         published: existingArticle.published,
         thumbnail_url: existingArticle.thumbnail_url,
         thumbnail_alt: existingArticle.thumbnail_alt || "",
         thumbnail_caption: existingArticle.thumbnail_caption || "",
         thumbnail_crop: existingArticle.thumbnail_crop || { zoom: 1, x: 50, y: 50 },
         tags: existingArticle.tags || [],
-        custom_title: existingArticle.custom_title || null,
+        custom_title: existingArticle.custom_title || parsedContent.custom_title || null,
         author_name: existingArticle.author_name || 'DJ Akademiks',
         published_at: existingArticle.published_at || null
       });
     }
 
+    // If it's a draft or doesn't exist, proceed with AI generation
     const prompt = `You are a senior writer for 'The Akademy', a premium hip-hop media platform. 
     A news story just broke. Here is the headline: "${title}" (Originally reported by ${source}).
     
@@ -51,7 +54,8 @@ export async function POST(req: NextRequest) {
 
     You must respond with a valid JSON object matching this exact structure. Do not include any other text or markdown blocks:
     {
-      "takeaways": ["Bullet point 1", "Bullet point 2", "Bullet point 3"],
+      "custom_title": "An engaging, click-worthy, SEO-optimized headline for the article (different from the original raw title)",
+      "takeaways": ["3 to 5 key bullet points summarizing the core facts and context of the article"],
       "article": "The 6 paragraphs of the story formatted in Markdown. In the exact middle of the article, include the placeholder: [ADMIN: INSERT IMAGE/VIDEO HERE]"
     }`;
 
@@ -71,7 +75,8 @@ export async function POST(req: NextRequest) {
       .upsert({ 
         title, source, content: stringifiedResponse, published: false,
         thumbnail_url: null, tags: [], author_name: 'DJ Akademiks', published_at: null,
-        thumbnail_caption: "", thumbnail_crop: { zoom: 1, x: 50, y: 50 }
+        thumbnail_caption: "", thumbnail_crop: { zoom: 1, x: 50, y: 50 },
+        custom_title: parsedResponse.custom_title || null
       }, { onConflict: 'title' });
 
     if (error) console.error('Supabase Save Error:', error);
@@ -79,7 +84,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ 
       ...parsedResponse, published: false, thumbnail_url: null, thumbnail_alt: "", 
       thumbnail_caption: "", thumbnail_crop: { zoom: 1, x: 50, y: 50 },
-      tags: [], custom_title: null, author_name: 'DJ Akademiks', published_at: null 
+      tags: [], custom_title: parsedResponse.custom_title || null, author_name: 'DJ Akademiks', published_at: null 
     });
   } catch (error) {
     console.error('Article Gen Error:', error);
