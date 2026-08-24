@@ -2,13 +2,11 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { ExternalLink } from "lucide-react";
 import SiteNav from "../components/SiteNav";
 import SiteFooter from "../components/SiteFooter";
 
-interface PublishedArticle { 
-  title: string; source: string; thumbnail_url: string; 
-  created_at: string; tags: string[]; contentSnippet?: string; 
-}
+interface PublishedArticle { title: string; source: string; thumbnail_url: string; created_at: string; tags: string[]; contentSnippet?: string; } // FIXED: Added contentSnippet
 
 export default function IndustryPage() {
   const [articles, setArticles] = useState<PublishedArticle[]>([]);
@@ -17,43 +15,21 @@ export default function IndustryPage() {
   const [streams, setStreams] = useState(1000000);
   const [payout, setPayout] = useState(3800);
 
-  // 1. Data Fetching Effect
   useEffect(() => {
     setIsMounted(true);
     fetch('/api/published-articles')
       .then(res => res.json())
       .then(data => {
-        const filtered = (data.articles || []).filter((a: PublishedArticle) => 
-          (a.tags || []).map(t => t.toLowerCase()).includes('industry')
-        );
+        const filtered = (data.articles || []).filter((a: PublishedArticle) => (a.tags || []).map(t => t.toLowerCase()).includes('industry'));
         setArticles(filtered);
         setLoading(false);
-      })
-      .catch(() => setLoading(false));
-  }, []);
-
-  // 2. Animation Observer Effect (Runs AFTER loading is done)
-  useEffect(() => {
-    if (loading) return;
-
-    const io = new IntersectionObserver((entries) => {
-      entries.forEach(entry => { 
-        if (entry.isIntersecting) { 
-          entry.target.classList.add('is-in'); 
-          io.unobserve(entry.target); 
-        } 
       });
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach(entry => { if (entry.isIntersecting) { entry.target.classList.add('is-in'); io.unobserve(entry.target); } });
     }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
-
-    const raf = requestAnimationFrame(() => {
-      document.querySelectorAll('.fade-up, .line-mask').forEach(el => io.observe(el));
-    });
-
-    return () => {
-      io.disconnect();
-      cancelAnimationFrame(raf);
-    };
-  }, [loading]);
+    document.querySelectorAll('.fade-up, .line-mask').forEach(el => io.observe(el));
+    return () => io.disconnect();
+  }, []);
 
   const handleCalc = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = Number(e.target.value);
@@ -64,7 +40,6 @@ export default function IndustryPage() {
   return (
     <div className="min-h-screen bg-zinc-950 text-white flex flex-col">
       <SiteNav activePage="Industry" />
-      
       <style dangerouslySetInnerHTML={{__html: `
         :root { --bg: #0a0a0a; --bg-elev: #131313; --text: #ffffff; --text-soft: #a8a8a8; --text-mute: #6e6e6e; --accent: #d24239; --accent-soft: rgba(210, 66, 57, 0.25); --line: rgba(255,255,255,0.10); --line-soft: rgba(255,255,255,0.06); --red: #d24239; --green: #6bbf6b; --ease-quiet: cubic-bezier(.22, 1, .36, 1); }
         .shell { max-width: 1400px; margin: 0 auto; padding: 64px 32px 80px; }
@@ -77,10 +52,17 @@ export default function IndustryPage() {
         .widgets-grid { display: grid; grid-template-columns: 1.2fr 1fr; gap: 48px; margin-bottom: 80px; }
         @media (max-width: 1100px) { .widgets-grid { grid-template-columns: 1fr; } }
         .section-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 32px; border-bottom: 1px solid var(--accent); padding-bottom: 12px; }
-        .section-head__left { display: flex; align-items: baseline; gap: 16px; }
+        .section-head__left { display: flex; align-items: center; gap: 16px; }
         .section-head__num { font-family: monospace; font-size: 11px; letter-spacing: 0.2em; color: var(--accent); }
-        .section-head__title { font-family: 'Times New Roman', serif; font-weight: 700; font-size: 28px; letter-spacing: -0.01em; }
+        .section-head__title { font-family: 'Times New Roman', serif; font-weight: 700; font-size: 28px; letter-spacing: -0.01em; display: flex; align-items: center; }
         .section-head__title em { font-style: italic; font-weight: 400; color: var(--accent); }
+        
+        .help-icon-wrapper { position: relative; display: inline-flex; align-items: center; margin-left: 8px; }
+        .help-icon { width: 14px; height: 14px; border: 1px solid var(--text-mute); border-radius: 50%; font-size: 9px; color: var(--text-mute); display: flex; align-items: center; justify-content: center; cursor: help; transition: all 0.3s ease; font-weight: bold; }
+        .help-icon:hover { border-color: var(--accent); color: var(--accent); }
+        .help-tooltip { position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); background: rgba(40, 40, 40, 0.95); backdrop-filter: blur(10px); border: 1px solid var(--line); padding: 10px 14px; font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 400; color: var(--text-soft); width: 240px; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; z-index: 100; line-height: 1.4; text-transform: none; letter-spacing: 0; }
+        .help-icon-wrapper:hover .help-tooltip { opacity: 1; }
+
         .contract-card { background: var(--bg-elev); border: 1px solid var(--line-soft); padding: 32px; }
         .contract-head { margin-bottom: 32px; }
         .contract-kicker { font-family: monospace; font-size: 10px; letter-spacing: 0.2em; color: var(--accent); text-transform: uppercase; margin-bottom: 12px; display: block; }
@@ -153,30 +135,21 @@ export default function IndustryPage() {
       <div className="shell">
         <header className="page-head fade-up">
           <div className="page-head__left">
-            <span className="page-head__num">08 / The Business</span>
+            <span className="page-head__num">07 / The Business</span>
             <h1 className="page-head__title line-mask"><span className="line-mask__inner"><em>The</em> Boardroom</span></h1>
           </div>
-          <div className="page-head__right">
-            The deals, the dollars, and the departures. A financial wire service for the music industry.
-          </div>
+          <div className="page-head__right">The deals, the dollars, and the departures. A financial wire service for the music industry.</div>
         </header>
 
         <div className="widgets-grid">
           <section className="fade-up">
-            <div className="section-head">
-              <div className="section-head__left">
-                <span className="section-head__num">No. 01</span>
-                <h2 className="section-head__title">The <em>Bag:</em> Contract Breakdown</h2>
-              </div>
-            </div>
-
+            <div className="section-head"><div className="section-head__left"><span className="section-head__num">No. 01</span><h2 className="section-head__title">The <em>Bag:</em> Contract Breakdown <div className="help-icon-wrapper"><span className="help-icon">?</span><span className="help-tooltip">Breakdowns of reported deals, showing advances, royalty splits, and ownership clauses.</span></div></h2></div></div>
             <div className="contract-card">
               <div className="contract-head">
                 <span className="contract-kicker">Deal Analysis · 2024</span>
                 <h3 className="contract-title">Drake's <em>$400M</em> Universal Deal Explained</h3>
                 <p className="contract-summary">A historic 10-year multi-rights agreement that redefines what a "360 deal" looks like at the highest echelon of the music industry.</p>
               </div>
-
               <div className="ledger">
                 <div className="ledger-row"><div className="ledger-label">Advance (Upfront)</div><div className="ledger-value">$150,000,000</div></div>
                 <div className="ledger-row"><div className="ledger-label">Royalty Split (Artist / Label)</div><div className="ledger-value">50 / 50</div></div>
@@ -189,28 +162,17 @@ export default function IndustryPage() {
           </section>
 
           <aside className="fade-up">
-            <div className="section-head">
-              <div className="section-head__left">
-                <span className="section-head__num">No. 02</span>
-                <h2 className="section-head__title">Royalty <em>Calculator</em></h2>
-              </div>
-            </div>
-
+            <div className="section-head"><div className="section-head__left"><span className="section-head__num">No. 02</span><h2 className="section-head__title">Royalty <em>Calculator</em> <div className="help-icon-wrapper"><span className="help-icon">?</span><span className="help-tooltip">Interactive tool where users type in a Spotify stream count to calculate estimated payouts.</span></div></h2></div></div>
             <div className="calc-card">
               <span className="calc-kicker">Interactive Tool · Spotify</span>
               <h3 className="calc-title">How much does a stream actually pay?</h3>
-              
               <div className="calc-input-group">
                 <input type="number" className="calc-input" placeholder="1,000,000" value={streams} onChange={handleCalc} />
                 <span className="calc-input-label">Streams</span>
               </div>
-
               <div className="calc-result">
                 <div className="calc-result-label">Estimated Payout</div>
-                {/* Removed the hardcoded $ to prevent the double $$ bug */}
-                <div className="calc-result-value">
-                  {payout.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </div>
+                <div className="calc-result-value">${payout.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                 <div className="calc-disclaimer">*Based on $0.0038 per stream average. Net of publisher/mechanical cuts.</div>
               </div>
             </div>
@@ -218,103 +180,34 @@ export default function IndustryPage() {
         </div>
 
         <section className="fade-up">
-          <div className="section-head">
-            <div className="section-head__left">
-              <span className="section-head__num">No. 03</span>
-              <h2 className="section-head__title">Indie vs. <em>Major</em> Case Studies</h2>
-            </div>
-          </div>
-
+          <div className="section-head"><div className="section-head__left"><span className="section-head__num">No. 03</span><h2 className="section-head__title">Indie vs. <em>Major</em> Case Studies <div className="help-icon-wrapper"><span className="help-icon">?</span><span className="help-tooltip">Case studies on how independent artists built their own infrastructure vs. artists who signed 360 deals.</span></div></h2></div></div>
           <div className="vs-grid">
             <div className="vs-col vs-col--indie">
-              <div className="vs-head">
-                <div className="vs-avatar">R</div>
-                <div>
-                  <span className="vs-tag">The Indie Blueprint</span>
-                  <div className="vs-name">Russ</div>
-                </div>
-              </div>
-              <ul className="vs-list">
-                <li><span>Distribution Model</span><strong>Independent / Empire</strong></li>
-                <li><span>Initial Royalty Split</span><strong>100% to Artist</strong></li>
-                <li><span>Masters Ownership</span><strong>100% Retained</strong></li>
-                <li><span>Marketing Budget</span><strong>Organic / Social</strong></li>
-                <li><span>Key Advantage</span><strong>Full Creative Control</strong></li>
-                <li><span>Key Risk</span><strong>Financial Ceiling</strong></li>
-              </ul>
+              <div className="vs-head"><div className="vs-avatar">R</div><div><span className="vs-tag">The Indie Blueprint</span><div className="vs-name">Russ</div></div></div>
+              <ul className="vs-list"><li><span>Distribution Model</span><strong>Independent / Empire</strong></li><li><span>Initial Royalty Split</span><strong>100% to Artist</strong></li><li><span>Masters Ownership</span><strong>100% Retained</strong></li><li><span>Marketing Budget</span><strong>Organic / Social</strong></li></ul>
             </div>
-
             <div className="vs-col vs-col--major">
-              <div className="vs-head">
-                <div className="vs-avatar">A</div>
-                <div>
-                  <span className="vs-tag" style={{ color: 'var(--red)' }}>The Major 360 Deal</span>
-                  <div className="vs-name">Artist X (Average)</div>
-                </div>
-              </div>
-              <ul className="vs-list">
-                <li><span>Distribution Model</span><strong>Major Label (UMG/Sony/WMG)</strong></li>
-                <li><span>Initial Royalty Split</span><strong>~85/15 (Label/Artist)</strong></li>
-                <li><span>Masters Ownership</span><strong>Label Retains Perpetuity</strong></li>
-                <li><span>Marketing Budget</span><strong>$500K - $2M Advance</strong></li>
-                <li><span>Key Advantage</span><strong>Radio & Playlist Power</strong></li>
-                <li><span>Key Risk</span><strong>Recoupment Debt</strong></li>
-              </ul>
+              <div className="vs-head"><div className="vs-avatar">A</div><div><span className="vs-tag" style={{ color: 'var(--red)' }}>The Major 360 Deal</span><div className="vs-name">Artist X (Average)</div></div></div>
+              <ul className="vs-list"><li><span>Distribution Model</span><strong>Major Label (UMG/Sony/WMG)</strong></li><li><span>Initial Royalty Split</span><strong>~85/15 (Label/Artist)</strong></li><li><span>Masters Ownership</span><strong>Label Retains Perpetuity</strong></li><li><span>Marketing Budget</span><strong>$500K - $2M Advance</strong></li></ul>
             </div>
           </div>
         </section>
 
         <section className="fade-up">
-          <div className="section-head">
-            <div className="section-head__left">
-              <span className="section-head__num">No. 04</span>
-              <h2 className="section-head__title">Executive <em>Moves</em></h2>
-            </div>
-          </div>
-
+          <div className="section-head"><div className="section-head__left"><span className="section-head__num">No. 04</span><h2 className="section-head__title">Executive <em>Moves</em> <div className="help-icon-wrapper"><span className="help-icon">?</span><span className="help-tooltip">Who got hired or fired at major labels. Proves the site appeals to industry executives.</span></div></h2></div></div>
           <ul className="exec-list">
-            <li className="exec-row">
-              <div className="exec-label is-hire">HIRED</div>
-              <div className="exec-info"><div className="exec-name">Tunji Balogun</div><div className="exec-role">Chairman & CEO</div></div>
-              <div className="exec-company">Def Jam Records</div>
-            </li>
-            <li className="exec-row">
-              <div className="exec-label is-fire">FIRED</div>
-              <div className="exec-info"><div className="exec-name">Lucian Grainge</div><div className="exec-role">CEO (Stepping Down)</div></div>
-              <div className="exec-company">Universal Music Group</div>
-            </li>
-            <li className="exec-row">
-              <div className="exec-label is-hire">HIRED</div>
-              <div className="exec-info"><div className="exec-name">Elliott Wilson</div><div className="exec-role">VP of Content / Hip-Hop</div></div>
-              <div className="exec-company">Interscope Records</div>
-            </li>
-            <li className="exec-row">
-              <div className="exec-label is-fire">FIRED</div>
-              <div className="exec-info"><div className="exec-name">Julie Greenwald</div><div className="exec-role">Chairman & COO</div></div>
-              <div className="exec-company">Atlantic Music Group</div>
-            </li>
+            <li className="exec-row"><div className="exec-label is-hire">HIRED</div><div className="exec-info"><div className="exec-name">Tunji Balogun</div><div className="exec-role">Chairman & CEO</div></div><div className="exec-company">Def Jam Records</div></li>
+            <li className="exec-row"><div className="exec-label is-fire">FIRED</div><div className="exec-info"><div className="exec-name">Lucian Grainge</div><div className="exec-role">CEO (Stepping Down)</div></div><div className="exec-company">Universal Music Group</div></li>
           </ul>
         </section>
 
         <section className="fade-up">
-          <div className="section-head">
-            <div className="section-head__left">
-              <span className="section-head__num">No. 05</span>
-              <h2 className="section-head__title">Industry <em>Coverage</em></h2>
-            </div>
-          </div>
-
-          {loading ? (
-            <div className="text-zinc-500 animate-pulse">Loading articles...</div>
-          ) : articles.length === 0 ? (
-            <div className="text-zinc-600 italic text-center py-20">No industry articles published yet.</div>
-          ) : (
+          <div className="section-head"><div className="section-head__left"><span className="section-head__num">No. 05</span><h2 className="section-head__title">Industry <em>Coverage</em></h2></div></div>
+          {loading ? <div className="text-zinc-500 animate-pulse">Loading articles...</div> : articles.length === 0 ? <div className="text-zinc-600 italic text-center py-20">No industry articles published yet.</div> : (
             <div className="story-grid">
               {articles.map((article, idx) => (
                 <Link href={`/article?title=${encodeURIComponent(article.title)}&source=The Akademy`} key={idx} className="story">
-                  <div className="story__image">
-                    <img src={article.thumbnail_url || `https://picsum.photos/seed/boardroom-news-${idx}/600/450`} alt="" />
-                  </div>
+                  <div className="story__image"><img src={article.thumbnail_url || `https://picsum.photos/seed/boardroom-news-${idx}/600/450`} alt="" /></div>
                   <div className="story__kicker">Industry</div>
                   <h3 className="story__title">{article.title}</h3>
                   <p className="story__dek">{article.contentSnippet || "Read the full breakdown."}</p>

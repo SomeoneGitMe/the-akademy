@@ -13,16 +13,13 @@ interface PublishedArticle {
 const mockMusicArticles = [
   { title: "Drake Submits to 'Goth Baddie' Streamer", source: "The Akademy", thumbnail_url: "https://images.unsplash.com/photo-1605295322749-6ef2395d4c30?auto=format&fit=crop&w=800&q=80", created_at: new Date().toISOString(), tags: ["Music", "News"] },
   { title: "Kendrick Lamar Drops Surprise Diss Track", source: "The Akademy", thumbnail_url: "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=800&q=80", created_at: new Date().toISOString(), tags: ["Music", "News"] },
-  { title: "Lil Durk's Legal Team Files Motion", source: "The Akademy", thumbnail_url: "https://images.unsplash.com/photo-1605542339524-1b2f8b6c6c1b?auto=format&fit=crop&w=800&q=80", created_at: new Date().toISOString(), tags: ["Music", "Legal"] },
-  { title: "J. Cole announces 2026 world tour", source: "The Akademy", thumbnail_url: "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?auto=format&fit=crop&w=800&q=80", created_at: new Date().toISOString(), tags: ["Music", "Industry"] },
 ];
 
 export default function ChartsPage() {
   const [articles, setArticles] = useState<PublishedArticle[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isMounted, setIsMounted] = useState(false);
+  const [isMounted, setIsMounted] = useState(false); // FIXED: Added back missing state
 
-  // 1. Data Fetching Effect
   useEffect(() => {
     setIsMounted(true);
     fetch('/api/published-articles')
@@ -38,25 +35,12 @@ export default function ChartsPage() {
         setArticles(mockMusicArticles);
         setLoading(false);
       });
-  }, []);
-
-  // 2. Animation Observer Effect (Runs AFTER loading is done)
-  useEffect(() => {
-    if (loading) return;
 
     const io = new IntersectionObserver((entries) => {
-      entries.forEach(entry => { 
-        if (entry.isIntersecting) { 
-          entry.target.classList.add('is-in'); 
-          io.unobserve(entry.target); 
-        } 
-      });
+      entries.forEach(entry => { if (entry.isIntersecting) { entry.target.classList.add('is-in'); io.unobserve(entry.target); } });
     }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
-
-    const raf = requestAnimationFrame(() => {
-      document.querySelectorAll('.fade-up, .line-mask').forEach(el => io.observe(el));
-    });
-
+    document.querySelectorAll('.fade-up, .line-mask').forEach(el => io.observe(el));
+    
     const chartObserver = new IntersectionObserver((entries) => {
       entries.forEach(entry => {
         if (entry.isIntersecting) {
@@ -66,16 +50,11 @@ export default function ChartsPage() {
         }
       });
     }, { threshold: 0.2 });
-    
     const chart = document.querySelector('.sales-chart');
     if (chart) chartObserver.observe(chart);
 
-    return () => {
-      io.disconnect();
-      cancelAnimationFrame(raf);
-      if (chart) chartObserver.unobserve(chart);
-    };
-  }, [loading]);
+    return () => { io.disconnect(); if (chart) chartObserver.unobserve(chart); };
+  }, []);
 
   const topTracks = [
     { rank: "01", art: "https://images.genius.com/c6619186e8f93ff5c7ce61912e08d9c0.1000x1000x1.png", title: "STFU", artist: "Drake", peak: "1", weeks: "6", trend: "flat" },
@@ -85,13 +64,12 @@ export default function ChartsPage() {
     { rank: "05", art: "https://images.genius.com/c6619186e8f93ff5c7ce61912e08d9c0.1000x1000x1.png", title: "Not Like Us", artist: "Kendrick Lamar", peak: "5", weeks: "12", trend: "down" },
   ];
 
-  // Updated to Chronological Order with corrected EAU numbers and bar percentages
   const albumSales = [
-    { art: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTi7hPBhD4O1AyVTnhrdGh_XMUilnAc3tP3LimIfADNzUzYA2lLRKt5nfV4&s=10", album: "Maverick (Almost Forever)", artist: "Lil Uzi Vert · Aug 2026", percent: "5%", units: "23K", isTop: false },
-    { art: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcT0FlVn4R5jRPvaYAG43X1m_K54eBFcwNPAaKNbCK-DyE_-u649-NhTnkOT&s=10", album: "The Real Me", artist: "Future · Jul 2026", percent: "15%", units: "68K", isTop: false },
-    { art: "https://substackcdn.com/image/fetch/$s_!Tddb!,f_auto,q_auto:good,fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2F29e39ea5-d9e5-4b5e-bd3e-6dff39110eae_3000x3000.jpeg", album: "Kill the King", artist: "T.I. · Jul 2026", percent: "10%", units: "45K", isTop: false },
-    { art: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR8aImkF1hbihVEp_563hOqUElAD3PdEFbCD_HepPkWEg&s=10", album: "ICEMAN", artist: "Drake · May 2026", percent: "100%", units: "463K", isTop: true },
-    { art: "https://www.sentireascoltare.com/wp-content/uploads/2026/02/j-cole-the-fall-off.webp", album: "The Fall Off", artist: "J. Cole · Early 2026", percent: "24%", units: "110K", isTop: false },
+    { art: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTi7hPBhD4O1AyVTnhrdGh_XMUilnAc3tP3LimIfADNzUzYA2lLRKt5nfV4&s=10", album: "Maverick (Almost Forever)", artist: "Lil Uzi Vert · Aug 2026", percent: "100%", units: "315K", isTop: true },
+    { art: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcT0FlVn4R5jRPvaYAG43X1m_K54eBFcwNPAaKNbCK-DyE_-u649-NhTnkOT&s=10", album: "The Real Me", artist: "Future · Jul 2026", percent: "85%", units: "268K", isTop: false },
+    { art: "https://substackcdn.com/image/fetch/$s_!Tddb!,f_auto,q_auto:good,fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2F29e39ea5-d9e5-4b5e-bd3e-6dff39110eae_3000x3000.jpeg", album: "Kill the King", artist: "T.I. · Jul 2026", percent: "55%", units: "175K", isTop: false },
+    { art: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR8aImkF1hbihVEp_563hOqUElAD3PdEFbCD_HepPkWEg&s=10", album: "ICEMAN", artist: "Drake · May 2026", percent: "92%", units: "290K", isTop: false },
+    { art: "https://www.sentireascoltare.com/wp-content/uploads/2026/02/j-cole-the-fall-off.webp", album: "The Fall Off", artist: "J. Cole · Early 2026", percent: "78%", units: "245K", isTop: false },
   ];
 
   return (
@@ -107,11 +85,18 @@ export default function ChartsPage() {
         .page-head__title em { font-style: italic; font-weight: 400; color: var(--accent); }
         .page-head__dek { font-family: 'Times New Roman', serif; font-size: 20px; line-height: 1.5; color: var(--text-soft); max-width: 680px; margin: 0 auto; }
         .section-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 40px; border-bottom: 1px solid var(--accent); padding-bottom: 16px; }
-        .section-head__left { display: flex; align-items: baseline; gap: 16px; }
+        .section-head__left { display: flex; align-items: center; gap: 16px; }
         .section-head__num { font-family: monospace; font-size: 11px; letter-spacing: 0.2em; color: var(--accent); }
-        .section-head__title { font-family: 'Times New Roman', serif; font-weight: 700; font-size: 32px; letter-spacing: -0.01em; }
+        .section-head__title { font-family: 'Times New Roman', serif; font-weight: 700; font-size: 32px; letter-spacing: -0.01em; display: flex; align-items: center; }
         .section-head__title em { font-style: italic; font-weight: 400; color: var(--accent); }
         .section-head__more { font-family: monospace; font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--text-mute); }
+        
+        .help-icon-wrapper { position: relative; display: inline-flex; align-items: center; margin-left: 8px; }
+        .help-icon { width: 14px; height: 14px; border: 1px solid var(--text-mute); border-radius: 50%; font-size: 9px; color: var(--text-mute); display: flex; align-items: center; justify-content: center; cursor: help; transition: all 0.3s ease; font-weight: bold; }
+        .help-icon:hover { border-color: var(--accent); color: var(--accent); }
+        .help-tooltip { position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); background: rgba(40, 40, 40, 0.95); backdrop-filter: blur(10px); border: 1px solid var(--line); padding: 10px 14px; font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 400; color: var(--text-soft); width: 240px; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; z-index: 100; line-height: 1.4; text-transform: none; letter-spacing: 0; }
+        .help-icon-wrapper:hover .help-tooltip { opacity: 1; }
+
         .billboard { list-style: none; margin-bottom: 100px; padding: 0; }
         .billboard-row { display: grid; grid-template-columns: 80px 80px 1fr auto auto 60px; align-items: center; gap: 32px; padding: 20px 0; border-bottom: 1px solid var(--line-soft); transition: background .3s var(--ease-quiet); }
         .billboard-row:hover { background: rgba(255,255,255,0.015); }
@@ -148,10 +133,7 @@ export default function ChartsPage() {
         .live-bg img { width: 100%; height: 100%; object-fit: cover; opacity: 0.5; filter: grayscale(0.8) contrast(1.2); }
         .live-content { position: relative; z-index: 2; padding: 32px; background: linear-gradient(0deg, var(--bg) 10%, transparent 100%); }
         .live-tag { display: inline-flex; align-items: center; gap: 8px; background: var(--red); color: #fff; padding: 4px 12px; margin-bottom: 16px; font-family: monospace; font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; font-weight: 700; }
-        .live-tag::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: #fff; animation: pulse 1.5s infinite; }
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
         .live-title { font-family: 'Times New Roman', serif; font-weight: 700; font-size: 36px; line-height: 1.1; margin-bottom: 12px; }
-        .live-title em { font-style: italic; }
         .live-meta { display: flex; gap: 16px; font-family: monospace; font-size: 11px; color: var(--text-soft); text-transform: uppercase; letter-spacing: 0.12em; }
         .news-list { display: flex; flex-direction: column; gap: 24px; }
         .news-item { padding-bottom: 24px; border-bottom: 1px solid var(--line-soft); }
@@ -168,7 +150,6 @@ export default function ChartsPage() {
         .story__kicker { font-family: monospace; font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--accent); margin-top: 4px; }
         .story__title { font-family: 'Times New Roman', serif; font-weight: 700; font-size: 22px; line-height: 1.2; }
         .story:hover .story__title { color: var(--accent); }
-        .story__meta { font-family: monospace; font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-mute); }
         .fade-up { opacity: 0; transform: translateY(24px); transition: opacity .9s var(--ease-quiet), transform .9s var(--ease-quiet); }
         .fade-up.is-in { opacity: 1; transform: none; }
         .line-mask { overflow: hidden; display: inline-block; }
@@ -183,12 +164,17 @@ export default function ChartsPage() {
           <p className="page-head__dek fade-up">The authoritative source for hip-hop analytics. Real-time rankings, first-week projections, and market share.</p>
         </header>
 
-        {/* TOP 5 TRACKS */}
         <section className="fade-up">
           <div className="section-head">
             <div className="section-head__left">
               <span className="section-head__num">No. 01</span>
-              <h2 className="section-head__title"><em>The Hot 5</em> Tracks Right Now</h2>
+              <h2 className="section-head__title">
+                <em>The Hot 5</em> Tracks Right Now
+                <div className="help-icon-wrapper">
+                  <span className="help-icon">?</span>
+                  <span className="help-tooltip">Real-time ranking of the top tracks dominating streaming and radio right now.</span>
+                </div>
+              </h2>
             </div>
             <Link href="#" className="section-head__more">View Full Chart →</Link>
           </div>
@@ -203,21 +189,24 @@ export default function ChartsPage() {
                   <div className="bb-artist">{track.artist}</div>
                 </div>
                 <div className="bb-stats"><strong>Peak: {track.peak}</strong>{track.weeks} Weeks on Chart</div>
-                <div className={`bb-trend trend-${track.trend}`}>
-                  {track.trend === 'up' ? '▲' : track.trend === 'down' ? '▼' : track.trend === 'new' ? '★' : '—'}
-                </div>
+                <div className={`bb-trend trend-${track.trend}`}>{track.trend === 'up' ? '▲' : track.trend === 'down' ? '▼' : track.trend === 'new' ? '★' : '—'}</div>
                 <button className="bb-play">▶</button>
               </li>
             ))}
           </ul>
         </section>
 
-        {/* FIRST WEEK SALES */}
         <section className="fade-up">
           <div className="section-head">
             <div className="section-head__left">
               <span className="section-head__num">No. 02</span>
-              <h2 className="section-head__title">First Week <em>Album Sales</em></h2>
+              <h2 className="section-head__title">
+                First Week <em>Album Sales</em>
+                <div className="help-icon-wrapper">
+                  <span className="help-icon">?</span>
+                  <span className="help-tooltip">First-week equivalent album units, combining physical sales, digital downloads, and streaming equivalent albums (SEA).</span>
+                </div>
+              </h2>
             </div>
             <Link href="#" className="section-head__more">Methodology →</Link>
           </div>
@@ -239,7 +228,6 @@ export default function ChartsPage() {
           </div>
         </section>
 
-        {/* MULTIMEDIA & ARTICLES */}
         <section className="fade-up">
           <div className="section-head">
             <div className="section-head__left">
@@ -267,10 +255,9 @@ export default function ChartsPage() {
                 <div className="news-item" key={idx}>
                   <span className="news-kicker">Music</span>
                   <Link href={`/article?title=${encodeURIComponent(article.title)}&source=The Akademy`}><h4 className="news-title">{article.title}</h4></Link>
-                  <div className="news-meta">By DJ Akademiks · {isMounted ? new Date(article.created_at).toLocaleDateString() : ''}</div>
+                  <div className="news-meta">By DJ Akademiks · {new Date(article.created_at).toLocaleDateString()}</div>
                 </div>
               ))}
-              {articles.length === 0 && <div className="news-item"><span className="news-kicker">Music</span><h4 className="news-title">No music articles published yet.</h4></div>}
             </div>
           </div>
 
@@ -282,10 +269,9 @@ export default function ChartsPage() {
                 </Link>
                 <div className="story__kicker">Review · Music</div>
                 <Link href={`/article?title=${encodeURIComponent(article.title)}&source=The Akademy`}><h3 className="story__title">{article.title}</h3></Link>
-                <div className="story__meta">By <strong>DJ Akademiks</strong> · {isMounted ? new Date(article.created_at).toLocaleDateString() : ''}</div>
+                <div className="news-meta">By <strong>DJ Akademiks</strong> · {isMounted ? new Date(article.created_at).toLocaleDateString() : ''}</div>
               </article>
             ))}
-            {articles.length === 0 && <div className="text-zinc-500 italic col-span-full text-center">No music articles published yet.</div>}
           </div>
         </section>
       </div>

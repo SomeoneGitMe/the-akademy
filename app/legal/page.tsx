@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { Loader2, Brain } from "lucide-react";
 import SiteNav from "../components/SiteNav";
 import SiteFooter from "../components/SiteFooter";
 
@@ -10,10 +11,18 @@ interface PublishedArticle {
   created_at: string; tags: string[]; contentSnippet?: string; 
 }
 
+interface LegalSection { label: string; text: string; }
+
 export default function LegalPage() {
   const [articles, setArticles] = useState<PublishedArticle[]>([]);
   const [loading, setLoading] = useState(true);
   const [isMounted, setIsMounted] = useState(false);
+  
+  const [topicInput, setTopicInput] = useState("The RICO Act");
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiSections, setAiSections] = useState<LegalSection[] | null>(null);
+  const [aiBottomLine, setAiBottomLine] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     setIsMounted(true);
@@ -34,6 +43,31 @@ export default function LegalPage() {
     return () => io.disconnect();
   }, []);
 
+  const handleExplain = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!topicInput.trim()) return;
+    
+    setAiLoading(true);
+    setAiSections(null);
+    setError(null);
+    
+    try {
+      const res = await fetch('/api/legal-ai', { 
+        method: 'POST', 
+        headers: { 'Content-Type': 'application/json' }, 
+        body: JSON.stringify({ topic: topicInput }) 
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      
+      setAiSections(data.sections);
+      setAiBottomLine(data.bottom_line);
+    } catch (err) {
+      setError("Failed to generate legal breakdown.");
+    }
+    setAiLoading(false);
+  };
+
   return (
     <div className="min-h-screen bg-zinc-950 text-white flex flex-col">
       <SiteNav activePage="Legal" />
@@ -50,10 +84,17 @@ export default function LegalPage() {
         .blotter-grid { display: grid; grid-template-columns: 1.5fr 1fr; gap: 64px; margin-bottom: 80px; }
         @media (max-width: 1100px) { .blotter-grid { grid-template-columns: 1fr; } }
         .section-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 32px; border-bottom: 1px solid var(--accent); padding-bottom: 12px; }
-        .section-head__left { display: flex; align-items: baseline; gap: 16px; }
+        .section-head__left { display: flex; align-items: center; gap: 16px; }
         .section-head__num { font-family: monospace; font-size: 11px; letter-spacing: 0.2em; color: var(--accent); }
-        .section-head__title { font-family: 'Times New Roman', serif; font-weight: 700; font-size: 28px; letter-spacing: -0.01em; }
+        .section-head__title { font-family: 'Times New Roman', serif; font-weight: 700; font-size: 28px; letter-spacing: -0.01em; display: flex; align-items: center; }
         .section-head__title em { font-style: italic; font-weight: 400; color: var(--accent); }
+        
+        .help-icon-wrapper { position: relative; display: inline-flex; align-items: center; margin-left: 8px; }
+        .help-icon { width: 14px; height: 14px; border: 1px solid var(--text-mute); border-radius: 50%; font-size: 9px; color: var(--text-mute); display: flex; align-items: center; justify-content: center; cursor: help; transition: all 0.3s ease; font-weight: bold; }
+        .help-icon:hover { border-color: var(--accent); color: var(--accent); }
+        .help-tooltip { position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); background: rgba(40, 40, 40, 0.95); backdrop-filter: blur(10px); border: 1px solid var(--line); padding: 10px 14px; font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 400; color: var(--text-soft); width: 240px; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; z-index: 100; line-height: 1.4; text-transform: none; letter-spacing: 0; }
+        .help-icon-wrapper:hover .help-tooltip { opacity: 1; }
+
         .timeline { position: relative; padding-left: 24px; border-left: 1px solid var(--line); margin-left: 8px; }
         .case-item { position: relative; padding-bottom: 40px; }
         .case-item:last-child { padding-bottom: 0; }
@@ -74,12 +115,22 @@ export default function LegalPage() {
         .ai-card { background: var(--bg-elev); border: 1px solid var(--accent-soft); border-left: 3px solid var(--accent); padding: 24px; }
         .ai-tag { display: flex; align-items: center; gap: 8px; font-family: monospace; font-size: 10px; letter-spacing: 0.18em; color: var(--accent); text-transform: uppercase; margin-bottom: 16px; }
         .ai-tag::before { content: '✦'; font-size: 14px; }
-        .ai-title { font-family: 'Times New Roman', serif; font-weight: 700; font-size: 22px; line-height: 1.2; margin-bottom: 16px; }
+        .ai-title { font-family: 'Times New Roman', serif; font-weight: 700; font-size: 22px; line-height: 1.2; margin-bottom: 16px; display: flex; align-items: center; }
         .ai-title em { font-style: italic; }
+        .ai-input-group { display: flex; align-items: center; gap: 12px; background: var(--bg); border: 1px solid var(--line); padding: 10px 14px; margin-bottom: 24px; transition: border-color .3s; }
+        .ai-input-group:focus-within { border-color: var(--accent); }
+        .ai-input { flex: 1; background: transparent; border: none; color: var(--text); font-family: monospace; font-size: 13px; outline: none; width: 100%; }
+        .ai-input::placeholder { color: var(--text-mute); }
+        .ai-btn { background: var(--accent); color: #fff; border: none; padding: 8px 14px; font-weight: 700; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: background .3s; }
+        .ai-btn:hover { background: #b91c1c; }
         .ai-text { font-family: 'Times New Roman', serif; font-size: 15px; line-height: 1.6; color: var(--text-soft); margin-bottom: 16px; }
         .ai-text strong { color: var(--text); font-weight: 500; }
         .ai-divider { height: 1px; background: var(--line); margin: 16px 0; }
         .ai-source { font-family: monospace; font-size: 9px; color: var(--text-mute); letter-spacing: 0.14em; text-transform: uppercase; }
+        .ai-output { margin-top: 24px; border-top: 1px solid var(--line); padding-top: 24px; }
+        .ai-row { margin-bottom: 20px; }
+        .ai-label { font-family: monospace; font-size: 10px; letter-spacing: 0.18em; color: var(--accent); text-transform: uppercase; margin-bottom: 6px; display: block; }
+        .ai-bottom { margin-top: 24px; padding: 16px; background: var(--bg); border: 1px solid var(--accent-soft); font-style: italic; }
         .verdict-table { width: 100%; border-collapse: collapse; }
         .verdict-table th { text-align: left; font-family: monospace; font-size: 9px; letter-spacing: 0.18em; color: var(--text-mute); text-transform: uppercase; padding-bottom: 12px; font-weight: 400; border-bottom: 1px solid var(--line); }
         .verdict-table td { padding: 16px 0; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
@@ -97,6 +148,7 @@ export default function LegalPage() {
         .story__kicker { font-family: monospace; font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--accent); margin-top: 4px; }
         .story__title { font-family: 'Times New Roman', serif; font-weight: 700; font-size: 22px; line-height: 1.2; }
         .story:hover .story__title { color: var(--accent); }
+        .story__title em { font-style: italic; font-weight: 400; }
         .story__dek { font-family: 'Times New Roman', serif; font-size: 15px; line-height: 1.4; color: var(--text-soft); }
         .story__meta { font-family: monospace; font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-mute); }
         .story__meta strong { color: var(--text-soft); font-weight: 500; }
@@ -113,9 +165,7 @@ export default function LegalPage() {
             <span className="page-head__num">08 / Court</span>
             <h1 className="page-head__title line-mask"><span className="line-mask__inner"><em>The</em> Blotter</span></h1>
           </div>
-          <div className="page-head__right">
-            Tracking the legal landscape of the industry. Indictments, plea deals, and verdicts explained.
-          </div>
+          <div className="page-head__right">Tracking the legal landscape of the industry. Indictments, plea deals, and verdicts explained.</div>
         </header>
 
         <div className="blotter-grid">
@@ -123,57 +173,30 @@ export default function LegalPage() {
             <div className="section-head">
               <div className="section-head__left">
                 <span className="section-head__num">No. 01</span>
-                <h2 className="section-head__title">Active <em>Cases</em></h2>
+                <h2 className="section-head__title">Active <em>Cases</em> <div className="help-icon-wrapper"><span className="help-icon">?</span><span className="help-tooltip">Timeline of ongoing legal issues, tracking court dates, charges, and plea statuses.</span></div></h2>
               </div>
             </div>
 
             <div className="timeline">
               <div className="case-item is-detained">
-                <div className="case-header">
-                  <div className="case-name">United States v. <em>Combs</em></div>
-                  <div className="case-status is-detained">Detained</div>
-                </div>
+                <div className="case-header"><div className="case-name">United States v. <em>Combs</em></div><div className="case-status is-detained">Detained</div></div>
                 <div className="case-charges">Charges: Racketeering conspiracy, sex trafficking by force/fraud/coercion, transportation to engage in prostitution.</div>
-                <div className="case-meta">
-                  <span><strong>Next Date:</strong> May 5, 2025</span>
-                  <span><strong>Status:</strong> Denied Bail</span>
-                </div>
+                <div className="case-meta"><span><strong>Next Date:</strong> May 5, 2025</span><span><strong>Status:</strong> Denied Bail</span></div>
               </div>
-
               <div className="case-item">
-                <div className="case-header">
-                  <div className="case-name">United States v. <em>Banks</em> (Lil Durk)</div>
-                  <div className="case-status is-bail">Arraigned</div>
-                </div>
+                <div className="case-header"><div className="case-name">United States v. <em>Banks</em> (Lil Durk)</div><div className="case-status is-bail">Arraigned</div></div>
                 <div className="case-charges">Charges: Conspiracy to commit murder-for-hire, use of interstate facilities to commit murder-for-hire.</div>
-                <div className="case-meta">
-                  <span><strong>Next Date:</strong> Dec 12, 2024</span>
-                  <span><strong>Status:</strong> Held without bond</span>
-                </div>
+                <div className="case-meta"><span><strong>Next Date:</strong> Dec 12, 2024</span><span><strong>Status:</strong> Held without bond</span></div>
               </div>
-
               <div className="case-item is-plea">
-                <div className="case-header">
-                  <div className="case-name">United States v. <em>Williams</em> (Young Thug)</div>
-                  <div className="case-status is-plea">Plea Accepted</div>
-                </div>
+                <div className="case-header"><div className="case-name">United States v. <em>Williams</em> (Young Thug)</div><div className="case-status is-plea">Plea Accepted</div></div>
                 <div className="case-charges">Charges: Violation of the RICO Act, participation in criminal street gang activity.</div>
-                <div className="case-meta">
-                  <span><strong>Next Date:</strong> N/A</span>
-                  <span><strong>Status:</strong> Released on Probation</span>
-                </div>
+                <div className="case-meta"><span><strong>Next Date:</strong> N/A</span><span><strong>Status:</strong> Released on Probation</span></div>
               </div>
-
               <div className="case-item">
-                <div className="case-header">
-                  <div className="case-name">United States v. <em>Jackson</em> (YG)</div>
-                  <div className="case-status is-bail">Out on Bail</div>
-                </div>
+                <div className="case-header"><div className="case-name">United States v. <em>Jackson</em> (YG)</div><div className="case-status is-bail">Out on Bail</div></div>
                 <div className="case-charges">Charges: Robbery (Felony), Assault with a deadly weapon.</div>
-                <div className="case-meta">
-                  <span><strong>Next Date:</strong> Jan 10, 2025</span>
-                  <span><strong>Status:</strong> Pending Pre-Trial</span>
-                </div>
+                <div className="case-meta"><span><strong>Next Date:</strong> Jan 10, 2025</span><span><strong>Status:</strong> Pending Pre-Trial</span></div>
               </div>
             </div>
           </section>
@@ -181,51 +204,33 @@ export default function LegalPage() {
           <aside className="widgets-col fade-up">
             <div className="ai-card">
               <div className="ai-tag">AI Indictment Breakdown</div>
-              <h3 className="ai-title">Understanding the <em>RICO</em> Act in Rap Indictments</h3>
-              <p className="ai-text">The Racketeer Influenced and Corrupt Organizations (RICO) Act was originally designed to dismantle the mafia. In recent years, prosecutors have applied it to rap crews, arguing that record labels or collectives operate as "criminal enterprises."</p>
-              <div className="ai-divider"></div>
-              <p className="ai-text"><strong>Plain English:</strong> The prosecution doesn't just charge an individual for one specific crime (like a single shooting). They charge the individual for being part of a group that commits ongoing crimes, making lyrics, social media posts, and group affiliation admissible as evidence of a conspiracy.</p>
-              <div className="ai-divider"></div>
-              <div className="ai-source">SOURCE: 18 U.S.C. Chapter 96 · Generated by Akademy AI</div>
+              <h3 className="ai-title">Decode Legal <em>Jargon</em> <div className="help-icon-wrapper"><span className="help-icon">?</span><span className="help-tooltip">Enter a legal concept, statute, or indictment term (e.g., RICO, Conspiracy, Wire Fraud). The AI will break it down into plain English.</span></div></h3>
+              
+              <form className="ai-input-group" onSubmit={handleExplain}>
+                <input type="text" className="ai-input" placeholder="e.g. RICO Act, Conspiracy, Wire Fraud" value={topicInput} onChange={(e) => setTopicInput(e.target.value)} />
+                <button type="submit" disabled={aiLoading} className="ai-btn">{aiLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Brain className="w-3 h-3" />}{aiLoading ? "..." : "Explain"}</button>
+              </form>
+
+              {aiLoading && <div className="text-zinc-500 animate-pulse flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Analyzing legal documents...</div>}
+              {error && <div className="text-red-500">{error}</div>}
+              {aiSections && (
+                <div className="ai-output">
+                  {aiSections.map((sec, idx) => (<div className="ai-row" key={idx}><span className="ai-label">{sec.label}</span><p className="ai-text">{sec.text}</p></div>))}
+                  {aiBottomLine && (<div className="ai-bottom"><span className="ai-label" style={{ color: 'var(--accent)' }}>Bottom Line</span><p className="ai-text" style={{ color: 'var(--text)' }}>{aiBottomLine}</p></div>)}
+                  <div className="ai-divider"></div><div className="ai-source">SOURCE: U.S. Legal Code · Generated by Akademy AI</div>
+                </div>
+              )}
             </div>
 
             <div>
-              <div className="section-head">
-                <div className="section-head__left">
-                  <span className="section-head__num">No. 02</span>
-                  <h2 className="section-head__title">Verdicts &amp; <em>Sentencings</em></h2>
-                </div>
-              </div>
-
+              <div className="section-head"><div className="section-head__left"><span className="section-head__num">No. 02</span><h2 className="section-head__title">Verdicts &amp; <em>Sentencings</em> <div className="help-icon-wrapper"><span className="help-icon">?</span><span className="help-tooltip">Log of recent outcomes, showing maximum time faced vs. actual time given.</span></div></h2></div></div>
               <table className="verdict-table">
-                <thead>
-                  <tr>
-                    <th>Defendant</th>
-                    <th>Max Faced</th>
-                    <th>Actual</th>
-                  </tr>
-                </thead>
+                <thead><tr><th>Defendant</th><th>Max Faced</th><th>Actual</th></tr></thead>
                 <tbody>
-                  <tr>
-                    <td><div className="verdict-name">Tory Lanez</div><div className="verdict-charge">Assault / Firearm</div></td>
-                    <td><span className="verdict-max">22 yrs</span></td>
-                    <td><span className="verdict-actual">10 yrs</span></td>
-                  </tr>
-                  <tr>
-                    <td><div className="verdict-name">YSL Mondo</div><div className="verdict-charge">RICO / Gang</div></td>
-                    <td><span className="verdict-max">20 yrs</span></td>
-                    <td><span className="verdict-actual">5 yrs</span></td>
-                  </tr>
-                  <tr>
-                    <td><div className="verdict-name">6ix9ine</div><div className="verdict-charge">RICO / Violence</div></td>
-                    <td><span className="verdict-max">Life</span></td>
-                    <td><span className="verdict-actual">2 yrs</span></td>
-                  </tr>
-                  <tr>
-                    <td><div className="verdict-name">Max B</div><div className="verdict-charge">Murder / Robbery</div></td>
-                    <td><span className="verdict-max">75 yrs</span></td>
-                    <td><span className="verdict-actual">12 yrs</span></td>
-                  </tr>
+                  <tr><td><div className="verdict-name">Tory Lanez</div><div className="verdict-charge">Assault / Firearm</div></td><td><span className="verdict-max">22 yrs</span></td><td><span className="verdict-actual">10 yrs</span></td></tr>
+                  <tr><td><div className="verdict-name">YSL Mondo</div><div className="verdict-charge">RICO / Gang</div></td><td><span className="verdict-max">20 yrs</span></td><td><span className="verdict-actual">5 yrs</span></td></tr>
+                  <tr><td><div className="verdict-name">6ix9ine</div><div className="verdict-charge">RICO / Violence</div></td><td><span className="verdict-max">Life</span></td><td><span className="verdict-actual">2 yrs</span></td></tr>
+                  <tr><td><div className="verdict-name">Max B</div><div className="verdict-charge">Murder / Robbery</div></td><td><span className="verdict-max">75 yrs</span></td><td><span className="verdict-actual">12 yrs</span></td></tr>
                 </tbody>
               </table>
             </div>
@@ -233,24 +238,12 @@ export default function LegalPage() {
         </div>
 
         <section className="fade-up">
-          <div className="section-head">
-            <div className="section-head__left">
-              <span className="section-head__num">No. 03</span>
-              <h2 className="section-head__title">Legal <em>Coverage</em></h2>
-            </div>
-          </div>
-
-          {loading ? (
-            <div className="text-zinc-500 animate-pulse">Loading articles...</div>
-          ) : articles.length === 0 ? (
-            <div className="text-zinc-600 italic text-center py-20">No legal articles published yet.</div>
-          ) : (
+          <div className="section-head"><div className="section-head__left"><span className="section-head__num">No. 03</span><h2 className="section-head__title">Legal <em>Coverage</em></h2></div></div>
+          {loading ? <div className="text-zinc-500 animate-pulse">Loading articles...</div> : articles.length === 0 ? <div className="text-zinc-600 italic text-center py-20">No legal articles published yet.</div> : (
             <div className="story-grid">
               {articles.map((article, idx) => (
                 <Link href={`/article?title=${encodeURIComponent(article.title)}&source=The Akademy`} key={idx} className="story">
-                  <div className="story__image">
-                    <img src={article.thumbnail_url || `https://picsum.photos/seed/legal-${idx}/600/450`} alt="" />
-                  </div>
+                  <div className="story__image"><img src={article.thumbnail_url || `https://picsum.photos/seed/legal-${idx}/600/450`} alt="" /></div>
                   <div className="story__kicker">Legal</div>
                   <h3 className="story__title">{article.title}</h3>
                   <p className="story__dek">{article.contentSnippet || "Read the full breakdown."}</p>

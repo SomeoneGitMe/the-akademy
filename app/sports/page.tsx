@@ -2,42 +2,37 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { Loader2 } from "lucide-react";
 import SiteNav from "../components/SiteNav";
 import SiteFooter from "../components/SiteFooter";
 
-interface PublishedArticle { 
-  title: string; source: string; thumbnail_url: string; 
-  created_at: string; tags: string[]; contentSnippet?: string; 
-}
+interface PublishedArticle { title: string; source: string; thumbnail_url: string; created_at: string; tags: string[]; contentSnippet?: string; }
+interface Insight { label: string; text: string; }
 
 export default function SportsPage() {
   const [articles, setArticles] = useState<PublishedArticle[]>([]);
   const [loading, setLoading] = useState(true);
   const [isMounted, setIsMounted] = useState(false);
   
-  // AI Almanac State
   const [propInput, setPropInput] = useState("LeBron Over 22.5 Pts vs Celtics");
-  const [verdict, setVerdict] = useState("OVER");
-  const [confidence, setConfidence] = useState("82%");
+  const [aiLoading, setAiLoading] = useState(false);
+  const [insights, setInsights] = useState<Insight[] | null>(null);
+  const [verdict, setVerdict] = useState<string | null>(null);
+  const [verdictReason, setVerdictReason] = useState<string | null>(null);
+  const [confidence, setConfidence] = useState<string | null>(null);
 
   useEffect(() => {
     setIsMounted(true);
-    fetch('/api/published-articles')
-      .then(res => res.json())
-      .then(data => {
-        const filtered = (data.articles || []).filter((a: PublishedArticle) => 
-          (a.tags || []).map(t => t.toLowerCase()).includes('sports')
-        );
-        setArticles(filtered);
-        setLoading(false);
-      });
+    fetch('/api/published-articles').then(res => res.json()).then(data => {
+      const filtered = (data.articles || []).filter((a: PublishedArticle) => (a.tags || []).map(t => t.toLowerCase()).includes('sports'));
+      setArticles(filtered); setLoading(false);
+    });
 
     const io = new IntersectionObserver((entries) => {
       entries.forEach(entry => { if (entry.isIntersecting) { entry.target.classList.add('is-in'); io.unobserve(entry.target); } });
     }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
     document.querySelectorAll('.fade-up, .line-mask').forEach(el => io.observe(el));
 
-    // Chart Bar stagger trigger for Heat Index
     const chartObserver = new IntersectionObserver((entries) => {
       entries.forEach(entry => {
         if (entry.isIntersecting) {
@@ -47,22 +42,24 @@ export default function SportsPage() {
         }
       });
     }, { threshold: 0.2 });
-
     const heatList = document.querySelector('.heat-list');
     if (heatList) chartObserver.observe(heatList);
-
     return () => { io.disconnect(); if (heatList) chartObserver.unobserve(heatList); };
   }, []);
 
-  const handleAnalyze = (e: React.FormEvent) => {
+  const handleAnalyze = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!propInput.trim()) return;
-    // Mock AI analysis
-    const confidences = ['82%', '76%', '91%', '68%', '88%'];
-    const verdicts = ['OVER', 'UNDER', 'OVER', 'THE UNDER', 'OVER'];
-    const random = Math.floor(Math.random() * 5);
-    setVerdict(verdicts[random]);
-    setConfidence(confidences[random]);
+    setAiLoading(true); setInsights(null); setVerdict(null);
+    try {
+      const res = await fetch('/api/sports-ai', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prop: propInput }) });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      setInsights(data.insights); setVerdict(data.verdict); setVerdictReason(data.verdict_reason); setConfidence(data.confidence);
+    } catch (err) {
+      setInsights([{ label: "ERROR", text: "Failed to generate scout report. Try again." }]);
+    }
+    setAiLoading(false);
   };
 
   const heatIndexPlayers = [
@@ -76,7 +73,6 @@ export default function SportsPage() {
   return (
     <div className="min-h-screen bg-zinc-950 text-white flex flex-col">
       <SiteNav activePage="Sports" />
-      
       <style dangerouslySetInnerHTML={{__html: `
         :root { --bg: #0a0a0a; --bg-elev: #131313; --text: #ffffff; --text-soft: #a8a8a8; --text-mute: #6e6e6e; --accent: #d24239; --accent-soft: rgba(210, 66, 57, 0.25); --line: rgba(255,255,255,0.10); --line-soft: rgba(255,255,255,0.06); --red: #d24239; --green: #6bbf6b; --ease-quiet: cubic-bezier(.22, 1, .36, 1); --ease-emphasis: cubic-bezier(.16, 1, .3, 1); }
         .shell { max-width: 1400px; margin: 0 auto; padding: 64px 32px 80px; }
@@ -89,16 +85,23 @@ export default function SportsPage() {
         .widgets-grid { display: grid; grid-template-columns: 1.2fr 1fr; gap: 48px; margin-bottom: 80px; }
         @media (max-width: 1100px) { .widgets-grid { grid-template-columns: 1fr; } }
         .section-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 32px; border-bottom: 1px solid var(--accent); padding-bottom: 12px; }
-        .section-head__left { display: flex; align-items: baseline; gap: 16px; }
+        .section-head__left { display: flex; align-items: center; gap: 16px; }
         .section-head__num { font-family: monospace; font-size: 11px; letter-spacing: 0.2em; color: var(--accent); }
-        .section-head__title { font-family: 'Times New Roman', serif; font-weight: 700; font-size: 28px; letter-spacing: -0.01em; }
+        .section-head__title { font-family: 'Times New Roman', serif; font-weight: 700; font-size: 28px; letter-spacing: -0.01em; display: flex; align-items: center; }
         .section-head__title em { font-style: italic; font-weight: 400; color: var(--accent); }
+        
+        .help-icon-wrapper { position: relative; display: inline-flex; align-items: center; margin-left: 8px; }
+        .help-icon { width: 14px; height: 14px; border: 1px solid var(--text-mute); border-radius: 50%; font-size: 9px; color: var(--text-mute); display: flex; align-items: center; justify-content: center; cursor: help; transition: all 0.3s ease; font-weight: bold; }
+        .help-icon:hover { border-color: var(--accent); color: var(--accent); }
+        .help-tooltip { position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); background: rgba(40, 40, 40, 0.95); backdrop-filter: blur(10px); border: 1px solid var(--line); padding: 10px 14px; font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 400; color: var(--text-soft); width: 240px; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; z-index: 100; line-height: 1.4; text-transform: none; letter-spacing: 0; }
+        .help-icon-wrapper:hover .help-tooltip { opacity: 1; }
+
         .almanac-card { background: var(--bg-elev); border: 1px solid var(--line); padding: 32px; }
         .almanac-input-group { display: flex; align-items: center; gap: 16px; background: var(--bg); border: 1px solid var(--line); padding: 12px 16px; margin-bottom: 32px; transition: border-color .3s; }
         .almanac-input-group:focus-within { border-color: var(--accent); }
         .almanac-input { flex: 1; background: transparent; border: none; color: var(--text); font-family: monospace; font-size: 14px; outline: none; width: 100%; }
         .almanac-input::placeholder { color: var(--text-mute); }
-        .almanac-btn { background: var(--accent); color: #fff; padding: 8px 16px; font-weight: 700; font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; transition: background .3s; cursor: pointer; border: none; }
+        .almanac-btn { background: var(--accent); color: #fff; padding: 8px 16px; font-weight: 700; font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; transition: background .3s; cursor: pointer; border: none; display: flex; align-items: center; gap: 8px; }
         .almanac-btn:hover { background: #b91c1c; }
         .scout-report { border-top: 1px solid var(--line); padding-top: 24px; }
         .report-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
@@ -170,142 +173,57 @@ export default function SportsPage() {
             <span className="page-head__num">09 / The Parlay</span>
             <h1 className="page-head__title line-mask"><span className="line-mask__inner"><em>The</em> Sports Desk</span></h1>
           </div>
-          <div className="page-head__right">
-            The picks, the probabilities, and the culture of the game. A data-driven terminal for the modern sports fanatic.
-          </div>
+          <div className="page-head__right">The picks, the probabilities, and the culture of the game. A data-driven terminal for the modern sports fanatic.</div>
         </header>
 
         <div className="widgets-grid">
-          {/* Akademy Almanac */}
           <section className="fade-up">
             <div className="section-head">
               <div className="section-head__left">
                 <span className="section-head__num">No. 01</span>
-                <h2 className="section-head__title">Akademy <em>Almanac</em></h2>
+                <h2 className="section-head__title">Akademy <em>Almanac</em> <div className="help-icon-wrapper"><span className="help-icon">?</span><span className="help-tooltip">Enter a player prop bet (e.g., Player Over/Under X Points vs Team). The AI will analyze matchups, pace, and trends to generate a scout report.</span></div></h2>
               </div>
               <span style={{ fontFamily: 'monospace', fontSize: '10px', color: 'var(--red)', letterSpacing: '0.14em', textTransform: 'uppercase', border: '1px solid var(--red)', padding: '4px 8px' }}>Premium</span>
             </div>
-
             <div className="almanac-card">
               <form className="almanac-input-group" onSubmit={handleAnalyze}>
                 <input type="text" className="almanac-input" placeholder="Enter prop: e.g. LeBron Over 22.5 Pts vs Celtics" value={propInput} onChange={(e) => setPropInput(e.target.value)} />
-                <button type="submit" className="almanac-btn">Analyze</button>
+                <button type="submit" disabled={aiLoading} className="almanac-btn">{aiLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}{aiLoading ? "Analyzing..." : "Analyze"}</button>
               </form>
-
               <div className="scout-report">
-                <div className="report-head">
-                  <div className="report-tag">AI Scout Report</div>
-                  <div className="report-confidence">Confidence: <strong>{confidence}</strong></div>
-                </div>
-                
-                <ul className="insight-list">
-                  <li className="insight-item">
-                    <div className="insight-icon">↑</div>
-                    <div className="insight-text"><strong>Historical Trend:</strong> LeBron has scored 25+ points in 4 of his last 5 games against Boston.</div>
-                  </li>
-                  <li className="insight-item">
-                    <div className="insight-icon">⚠</div>
-                    <div className="insight-text"><strong>Defensive Matchup:</strong> Celtics rank 3rd in points allowed to Small Forwards this season.</div>
-                  </li>
-                  <li className="insight-item">
-                    <div className="insight-icon">⚡</div>
-                    <div className="insight-text"><strong>Pace Data:</strong> Expected game pace is 102.4 possessions, well above league average.</div>
-                  </li>
-                  <li className="insight-item">
-                    <div className="insight-icon">∞</div>
-                    <div className="insight-text"><strong>Injury Impact:</strong> Anthony Davis listed as Questionable. If out, usage rate jumps +6.2%.</div>
-                  </li>
-                </ul>
-
-                <div className="report-verdict">
-                  <span className="verdict-label">AI Verdict</span>
-                  <span className="verdict-value">Lean: <em>{verdict}</em></span>
-                </div>
+                <div className="report-head"><div className="report-tag">AI Scout Report</div>{confidence && <div className="report-confidence">Confidence: <strong>{confidence}</strong></div>}</div>
+                {aiLoading && <div className="text-zinc-500 animate-pulse">Generating AI insights...</div>}
+                {insights && (
+                  <>
+                    <ul className="insight-list">{insights.map((insight, idx) => (<li className="insight-item" key={idx}><div className="insight-icon">{idx + 1}</div><div className="insight-text"><strong>{insight.label}:</strong> {insight.text}</div></li>))}</ul>
+                    {verdict && (<div className="report-verdict"><span className="verdict-label">AI Verdict</span><span className="verdict-value">Lean: <em>{verdict}</em></span></div>)}
+                    {verdictReason && <p style={{ marginTop: '12px', fontSize: '13px', color: 'var(--text-soft)', fontStyle: 'italic' }}>{verdictReason}</p>}
+                  </>
+                )}
               </div>
             </div>
           </section>
 
-          {/* Locks Leaderboard */}
           <aside className="fade-up">
-            <div className="section-head">
-              <div className="section-head__left">
-                <span className="section-head__num">No. 02</span>
-                <h2 className="section-head__title">The <em>Locks</em> Leaderboard</h2>
-              </div>
-            </div>
-
+            <div className="section-head"><div className="section-head__left"><span className="section-head__num">No. 02</span><h2 className="section-head__title">The <em>Locks</em> Leaderboard <div className="help-icon-wrapper"><span className="help-icon">?</span><span className="help-tooltip">A community-driven prediction board. Users lock in picks and the site tracks win/loss records over the season.</span></div></h2></div></div>
             <div className="locks-card">
               <ul className="locks-list">
-                <li className="lock-row is-top">
-                  <div className="lock-rank">01</div>
-                  <div className="lock-user">
-                    <div className="lock-name">SharpMoney_99 <span className="gold-badge">GOLD</span></div>
-                    <div className="lock-streak">🔥 12-Game Win Streak</div>
-                  </div>
-                  <div className="lock-record">42 - 8</div>
-                  <div className="lock-percent">84%</div>
-                </li>
-                <li className="lock-row">
-                  <div className="lock-rank">02</div>
-                  <div className="lock-user">
-                    <div className="lock-name">BookieSlayer</div>
-                    <div className="lock-streak">🔥 5-Game Win Streak</div>
-                  </div>
-                  <div className="lock-record">38 - 12</div>
-                  <div className="lock-percent">76%</div>
-                </li>
-                <li className="lock-row">
-                  <div className="lock-rank">03</div>
-                  <div className="lock-user">
-                    <div className="lock-name">UnderdogDegenerate</div>
-                    <div className="lock-streak">3-Game Loss Streak</div>
-                  </div>
-                  <div className="lock-record">35 - 15</div>
-                  <div className="lock-percent">70%</div>
-                </li>
-                <li className="lock-row">
-                  <div className="lock-rank">04</div>
-                  <div className="lock-user">
-                    <div className="lock-name">PlayerPropsOnly</div>
-                    <div className="lock-streak">2-Game Win Streak</div>
-                  </div>
-                  <div className="lock-record">31 - 19</div>
-                  <div className="lock-percent">62%</div>
-                </li>
-                <li className="lock-row">
-                  <div className="lock-rank">05</div>
-                  <div className="lock-user">
-                    <div className="lock-name">TheFadeKing</div>
-                    <div className="lock-streak">1-Game Loss Streak</div>
-                  </div>
-                  <div className="lock-record">28 - 22</div>
-                  <div className="lock-percent">56%</div>
-                </li>
+                <li className="lock-row is-top"><div className="lock-rank">01</div><div className="lock-user"><div className="lock-name">SharpMoney_99 <span className="gold-badge">GOLD</span></div><div className="lock-streak">🔥 12-Game Win Streak</div></div><div className="lock-record">42 - 8</div><div className="lock-percent">84%</div></li>
+                <li className="lock-row"><div className="lock-rank">02</div><div className="lock-user"><div className="lock-name">BookieSlayer</div><div className="lock-streak">🔥 5-Game Win Streak</div></div><div className="lock-record">38 - 12</div><div className="lock-percent">76%</div></li>
+                <li className="lock-row"><div className="lock-rank">03</div><div className="lock-user"><div className="lock-name">UnderdogDegenerate</div><div className="lock-streak">3-Game Loss Streak</div></div><div className="lock-record">35 - 15</div><div className="lock-percent">70%</div></li>
+                <li className="lock-row"><div className="lock-rank">04</div><div className="lock-user"><div className="lock-name">PlayerPropsOnly</div><div className="lock-streak">2-Game Win Streak</div></div><div className="lock-record">31 - 19</div><div className="lock-percent">62%</div></li>
+                <li className="lock-row"><div className="lock-rank">05</div><div className="lock-user"><div className="lock-name">TheFadeKing</div><div className="lock-streak">1-Game Loss Streak</div></div><div className="lock-record">28 - 22</div><div className="lock-percent">56%</div></li>
               </ul>
             </div>
           </aside>
         </div>
 
-        {/* DRAFT HEAT INDEX */}
         <section className="heat-index-section fade-up">
-          <div className="section-head">
-            <div className="section-head__left">
-              <span className="section-head__num">No. 03</span>
-              <h2 className="section-head__title">Draft <em>Heat</em> Index</h2>
-            </div>
-            <span style={{ fontFamily: 'monospace', fontSize: '10px', color: 'var(--text-mute)', letterSpacing: '0.14em', textTransform: 'uppercase' }}>2025 NBA Mock Consensus</span>
-          </div>
-
+          <div className="section-head"><div className="section-head__left"><span className="section-head__num">No. 03</span><h2 className="section-head__title">Draft <em>Heat</em> Index <div className="help-icon-wrapper"><span className="help-icon">?</span><span className="help-tooltip">Aggregates mock drafts and uses AI to calculate a consensus probability for where a player will get drafted.</span></div></h2></div><span style={{ fontFamily: 'monospace', fontSize: '10px', color: 'var(--text-mute)', letterSpacing: '0.14em', textTransform: 'uppercase' }}>2025 NBA Mock Consensus</span></div>
           <div className="heat-list">
             {heatIndexPlayers.map((p, idx) => (
               <div className={`heat-row ${p.isTop ? 'is-top' : ''}`} key={idx}>
-                <div className="heat-meta">
-                  <div className="heat-rank">{p.rank}</div>
-                  <div className="heat-name">
-                    <div className="heat-player">{p.player}</div>
-                    <div className="heat-pos">{p.pos}</div>
-                  </div>
-                </div>
+                <div className="heat-meta"><div className="heat-rank">{p.rank}</div><div className="heat-name"><div className="heat-player">{p.player}</div><div className="heat-pos">{p.pos}</div></div></div>
                 <div className="heat-bar-container"><div className="heat-bar" style={{ width: p.width }}></div></div>
                 <div className="heat-prob">{p.prob}</div>
               </div>
@@ -313,26 +231,13 @@ export default function SportsPage() {
           </div>
         </section>
 
-        {/* SPORTS ARTICLES */}
         <section className="fade-up">
-          <div className="section-head">
-            <div className="section-head__left">
-              <span className="section-head__num">No. 04</span>
-              <h2 className="section-head__title">Sports <em>Coverage</em></h2>
-            </div>
-          </div>
-
-          {loading ? (
-            <div className="text-zinc-500 animate-pulse">Loading articles...</div>
-          ) : articles.length === 0 ? (
-            <div className="text-zinc-600 italic text-center py-20">No sports articles published yet.</div>
-          ) : (
+          <div className="section-head"><div className="section-head__left"><span className="section-head__num">No. 04</span><h2 className="section-head__title">Sports <em>Coverage</em></h2></div></div>
+          {loading ? <div className="text-zinc-500 animate-pulse">Loading articles...</div> : articles.length === 0 ? <div className="text-zinc-600 italic text-center py-20">No sports articles published yet.</div> : (
             <div className="story-grid">
               {articles.map((article, idx) => (
                 <Link href={`/article?title=${encodeURIComponent(article.title)}&source=The Akademy`} key={idx} className="story">
-                  <div className="story__image">
-                    <img src={article.thumbnail_url || `https://picsum.photos/seed/sports-news-${idx}/600/450`} alt="" />
-                  </div>
+                  <div className="story__image"><img src={article.thumbnail_url || `https://picsum.photos/seed/sports-news-${idx}/600/450`} alt="" /></div>
                   <div className="story__kicker">Sports</div>
                   <h3 className="story__title">{article.title}</h3>
                   <p className="story__dek">{article.contentSnippet || "Read the full breakdown."}</p>
