@@ -47,7 +47,6 @@ export async function POST(req: NextRequest) {
     (No source text was provided. Write a brief 1-paragraph article based strictly on the headline above. Do NOT invent details.)
     `;
 
-    // THE JOURNALISTIC TEMPLATE PROMPT
     const prompt = `You are a senior writer for 'The Akademy', a premium hip-hop media platform. 
     A news story just broke. Here is the headline: "${title}" (Originally reported by ${source}).
     
@@ -65,7 +64,8 @@ export async function POST(req: NextRequest) {
     4. TONE: Write in a grounded, natural, human tone. Do not sound like an AI.
     5. Do not use robotic transitions like "Furthermore", "In conclusion", or "Moreover".
     6. DO NOT use em dashes (—) or en dashes (–) anywhere. Use commas or parentheses instead.
-    7. Do NOT mention the original source or the context block in the output.
+    7. ATTRIBUTION: At the very bottom of the article text, you MUST include the exact line: "Originally reported by ${source}." Do not include this anywhere else in the article.
+    8. Do NOT mention the original source or the context block anywhere else in the output.
 
     You must respond with a valid JSON object matching this exact structure. Do not include any other text or markdown blocks:
     {
@@ -81,8 +81,8 @@ export async function POST(req: NextRequest) {
       completion = await groq.chat.completions.create({
         model: modelId,
         messages: [{ role: "user", content: prompt }],
-        temperature: 0.5, // Slightly raised temp to allow for better creative writing of the context
-        max_tokens: 2000, // Increased to allow for the full 600+ word article
+        temperature: 0.5,
+        max_tokens: 2000,
         response_format: { type: "json_object" }
       });
     } catch (apiError: any) {
