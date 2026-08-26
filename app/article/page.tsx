@@ -28,6 +28,7 @@ function ArticleContent() {
   const titleId = searchParams.get("title") || "The State of Hip-Hop";
   const source = searchParams.get("source") || "News";
   const editMode = searchParams.get("edit") === "true";
+  const snippet = searchParams.get("snippet") || ""; // FIX: Read snippet from URL for RAG
   
   const [data, setData] = useState<ArticleData | null>(null);
   const [related, setRelated] = useState<RelatedArticle[]>([]);
@@ -55,9 +56,10 @@ function ArticleContent() {
     };
     checkAuth();
 
+    // FIX: Pass snippet as sourceText to the backend API
     fetch('/api/article', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title: titleId, source }),
+      body: JSON.stringify({ title: titleId, source, sourceText: snippet }),
     })
       .then(res => res.json())
       .then((data: any) => {
@@ -109,7 +111,7 @@ function ArticleContent() {
     };
     window.addEventListener('scroll', handleScroll);
     return () => { window.removeEventListener('scroll', handleScroll); io.disconnect(); };
-  }, [titleId, source, router, editMode]);
+  }, [titleId, source, router, editMode, snippet]);
 
   const handleSaveDraft = async () => {
     setSaving(true); setIsSaved(false);

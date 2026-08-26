@@ -341,7 +341,8 @@ export default function AdminDashboardPage() {
             </div>
             <div className="rss-list">
               {news.map((article, idx) => (
-                <Link key={idx} href={`/article?title=${encodeURIComponent(article.title)}&source=${article.source}&edit=true`} className="rss-card">
+                // FIX: Pass the contentSnippet to the article page so it can be used as sourceText for the RAG pipeline
+                <Link key={idx} href={`/article?title=${encodeURIComponent(article.title)}&source=${article.source}&edit=true&snippet=${encodeURIComponent(article.contentSnippet || '')}`} className="rss-card">
                   <div className="rss-head">
                     <div className="rss-source">{article.source}</div>
                     <div className="rss-count">NEW</div>
