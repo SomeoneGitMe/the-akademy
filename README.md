@@ -20,5 +20,4 @@ A custom, AI-driven media platform built to replace standard CMS environments. I
 - Optimistic UI: Client-side state management for instant tag inputs, image uploads, and draft saving.
 - Scalable CDN: Architecture designed to handle 25k+ concurrent viewers via Vercel Edge and Amazon IVS integration.
 
-🚀 Live Demo URL
-[N/A]
+🚀 Live Demo URL: (the-akademy.vercel.app)
