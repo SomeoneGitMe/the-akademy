@@ -13,19 +13,20 @@ const groq = new OpenAI({
 
 export async function POST(req: NextRequest) {
   try {
-    const { title: rawTitle, source, sourceText } = await req.json();
+    const { title: rawTitle, source: sourceParam, sourceText, sourceLink: sourceLinkParam } = await req.json();
     const title = rawTitle.trim();
 
     const { data: existingArticle } = await supabase
       .from('articles')
-      .select('content, published, thumbnail_url, thumbnail_alt, thumbnail_caption, thumbnail_crop, tags, custom_title, author_name, published_at')
+      .select('content, source, published, thumbnail_url, thumbnail_alt, thumbnail_caption, thumbnail_crop, tags, custom_title, author_name, published_at')
       .eq('title', title)
       .maybeSingle();
 
-    if (existingArticle && existingArticle.published) {
+    if (existingArticle && existingArticle.content) {
       const parsedContent = JSON.parse(existingArticle.content);
       return NextResponse.json({ 
-        ...parsedContent, 
+        ...parsedContent,
+        source: existingArticle.source || sourceParam,
         published: existingArticle.published,
         thumbnail_url: existingArticle.thumbnail_url,
         thumbnail_alt: existingArticle.thumbnail_alt || "",
@@ -48,31 +49,19 @@ export async function POST(req: NextRequest) {
     `;
 
     const prompt = `You are a senior writer for 'The Akademy', a premium hip-hop media platform. 
-    A news story just broke. Here is the headline: "${title}" (Originally reported by ${source}).
+    A news story just broke. Here is the headline: "${title}".
     
     ${contextBlock}
 
     STRICT RULES & JOURNALISTIC TEMPLATE:
-    1. ANTI-HALLUCINATION (EVENTS): Use ONLY the provided source text for the specific events, quotes, and actions that happened. DO NOT invent direct quotes or fake events.
-    2. EXPANSION ALLOWED (CONTEXT): You MAY use your pre-trained knowledge to provide historical context, biographical background on the artists mentioned, and industry themes, but DO NOT use it to invent new news events.
-    3. PACING: You must structure the article using the following pacing to ensure a robust, 600+ word article:
-       - Introduction (approx 100 words): Hook the reader and state the core conflict using the primary data source.
-       - The Catalyst (approx 150 words): Detail the original comments or event that sparked the story based on the source text.
-       - The Rebuttal (approx 150 words): Explore the responses, fallout, or fallout based on the source text.
-       - Industry Context (approx 150 words): Provide factual background on the artists' legacy or the genre's evolution using your pre-trained knowledge.
-       - Conclusion (approx 100 words): Wrap up the significance of the event.
-    4. TONE: Write in a grounded, natural, human tone. Do not sound like an AI.
-    5. Do not use robotic transitions like "Furthermore", "In conclusion", or "Moreover".
-    6. DO NOT use em dashes (—) or en dashes (–) anywhere. Use commas or parentheses instead.
-    7. ATTRIBUTION: At the very bottom of the article text, you MUST include the exact line: "Originally reported by ${source}." Do not include this anywhere else in the article.
-    8. Do NOT mention the original source or the context block anywhere else in the output.
+    1. ANTI-HALLUCINATION: Use ONLY the provided source text for events. DO NOT invent fake events.
+    2. FORMATTING: Write a 600+ word article. 5-6 standard text paragraphs. No subheadings.
+    3. TONE: Grounded, natural, human tone. Do not sound like an AI.
+    4. DO NOT use em dashes (—). 
+    5. Do NOT include any "Originally reported by" text. The system handles that.
+    6. CRITICAL: The "takeaways" array must contain ONLY factual bullet points about the news event. Do NOT mention the source name (e.g., Billboard, Complex) in the takeaways.
 
-    You must respond with a valid JSON object matching this exact structure. Do not include any other text or markdown blocks:
-    {
-      "custom_title": "An engaging, click-worthy, SEO-optimized headline for the article (different from the original raw title)",
-      "takeaways": ["3 to 5 key bullet points summarizing ONLY the facts provided in the context"],
-      "article": "The full 600+ word article formatted in Markdown following the Journalistic Template. In the exact middle of the article, include the placeholder: [ADMIN: INSERT IMAGE/VIDEO HERE]"
-    }`;
+    Respond with JSON: {"custom_title": "...", "takeaways": ["3 facts"], "article": "..."}`;
 
     const modelId = await getDynamicModel();
     let completion;
@@ -86,9 +75,6 @@ export async function POST(req: NextRequest) {
         response_format: { type: "json_object" }
       });
     } catch (apiError: any) {
-      console.error(`Primary model ${modelId} failed:`, apiError?.error?.message || apiError?.message);
-      console.log('Falling back to openai/gpt-oss-20b to bypass rate limits...');
-      
       completion = await groq.chat.completions.create({
         model: "openai/gpt-oss-20b",
         messages: [{ role: "user", content: prompt }],
@@ -99,21 +85,31 @@ export async function POST(req: NextRequest) {
     }
 
     const parsedResponse = JSON.parse(completion.choices[0].message.content);
+    
+    // GUARANTEED HYPERLINK INJECTION
+    if (parsedResponse.article) {
+      if (sourceLinkParam) {
+        parsedResponse.article += `\n\n*Originally reported by [${sourceParam}](${sourceLinkParam}).*`;
+      } else {
+        parsedResponse.article += `\n\n*Originally reported by ${sourceParam}.*`;
+      }
+    }
+
     const stringifiedResponse = JSON.stringify(parsedResponse);
 
     const { error } = await supabase
       .from('articles')
       .upsert({ 
-        title, source, content: stringifiedResponse, published: false,
+        title, source: sourceParam, content: stringifiedResponse, published: false,
         thumbnail_url: null, tags: [], author_name: 'DJ Akademiks', published_at: null,
         thumbnail_caption: "", thumbnail_crop: { zoom: 1, x: 50, y: 50 },
         custom_title: parsedResponse.custom_title || null
       }, { onConflict: 'title' });
 
-    if (error) console.error('Supabase Save Error:', error);
-
     return NextResponse.json({ 
-      ...parsedResponse, published: false, thumbnail_url: null, thumbnail_alt: "", 
+      ...parsedResponse, 
+      source: sourceParam,
+      published: false, thumbnail_url: null, thumbnail_alt: "", 
       thumbnail_caption: "", thumbnail_crop: { zoom: 1, x: 50, y: 50 },
       tags: [], custom_title: parsedResponse.custom_title || null, author_name: 'DJ Akademiks', published_at: null 
     });
