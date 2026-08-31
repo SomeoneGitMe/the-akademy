@@ -252,21 +252,16 @@ const REGISTRY = [
 const ALL_STATS: StatDef[] = Object.values(KIND_STATS).flat();
 const statDefFor = (key: string) => ALL_STATS.find(s => s.key === key) || null;
 
-/* FIXED: word-boundary MLB detection. "Pass Yds" can never again
-   trigger the baseball route — only true baseball terms do. */
-function isMLBQuery(prop: string, statKey: string | null): boolean {
+/* Word-boundary MLB detection — "Pass Yds" can never trigger baseball */
+function isMLBQuery(prop: string): boolean {
   const q = prop.toLowerCase();
-  // Explicit baseball stat with word boundaries
-  const baseballWords = ['strikeouts','strikeout','strike out','ks','k','homers','homer','home runs','home run','hrs','hr','rbi','rbis','innings','earned runs','hits','batting average','pitcher','pitching'];
+  const baseballWords = ['strikeouts','strikeout','strike out','homers','homer','home runs','home run','hrs','rbi','rbis','innings','earned runs','hits','batting average','pitcher','pitching','shutout','no-hitter'];
   for (const w of baseballWords) {
-    if (w.length <= 2) continue; // skip 'k' — too collision-prone
     const re = new RegExp(`\\b${w.replace(/ /g, '\\s+')}\\b`, 'i');
     if (re.test(q)) return true;
   }
-  // 'K' as a strikeout ONLY in a pitching context phrase
-  if (/\b(k|so)\s*(outs?|strikeouts?)\b/i.test(q) || /\bover\s+\d+(\.\d+)?\s*(k|so)\b/i.test(q) || /\b(k|so)s?\s+tonight\b/i.test(q)) return true;
-  // Baseball terms
-  if (/\b(baseball|mlb|pitcher|no-hitter|shutout)\b/i.test(q)) return true;
+  if (/\b(k|so)\s*(outs?|strikeouts?)\b/i.test(q) || /\bover\s+\d+(\.\d+)?\s*(k|so)\b/i.test(q)) return true;
+  if (/\b(baseball|mlb)\b/i.test(q)) return true;
   return false;
 }
 
@@ -443,8 +438,69 @@ function espnMatchTeam(teams: any[], rawQuery: string) {
   ) || null;
 }
 
-async function espnGetSchedule(entry: any, teamId: string) {
-  return cached(`espn:sched:${entry.key}:${teamId}`, 30 * 60 * 1000, async () => {
+/* ================================================================
+   THE DETERMINISTIC RESOLVER — per-league player indexes built
+   from team rosters. Search is flaky; rosters are not.
+   NFL = 32 calls once, cached 12 hours. This is what catches
+   Mahomes when search returns 0.
+   ============================================================ */
+
+async function espnGetLeaguePlayerIndex(entry: any) {
+  return cached(`espn:idx:${entry.key}`, 12 * 3600 * 1000, async () => {
+    const teams = await espnGetTeams(entry);
+    const players: any[] = [];
+    for (const t of (teams || [])) {
+      const roster = await httpGet(`${ESPN}/${entry.sport}/${entry.league}/teams/${t.id}/roster`, 8000);
+      const athletes = roster?.team?.athletes || roster?.athletes || [];
+      for (const a of athletes) {
+        const norm = deaccent(a?.displayName || a?.fullName || '');
+        if (!norm || !a?.id) continue;
+        players.push({
+          id: String(a.id),
+          name: String(a.displayName || a.fullName),
+          norm,
+          pos: String(a.position?.abbreviation || ''),
+          team: t.abbr.toUpperCase(),
+          teamId: t.id,
+          league: entry.label,
+          entry,
+        });
+      }
+    }
+    return players;
+  });
+}
+
+async function espnIndexLookup(playerQuery: string, entries: any[]) {
+  const q = deaccent(playerQuery);
+  if (!q) return null;
+  const qLast = q.split(/\s+/).pop();
+  for (const entry of entries) {
+    if (entry.kind === 'soccer') continue; // soccer has no site-API rosters — search handles it
+    const idx = await espnGetLeaguePlayerIndex(entry);
+    if (!idx || !idx.length) continue;
+    let hit = idx.find((p: any) => p.norm === q);
+    if (!hit && qLast && qLast.length > 2) {
+      const lastMatches = idx.filter((p: any) => p.norm.split(/\s+/).pop() === qLast);
+      if (lastMatches.length === 1) hit = lastMatches[0];
+    }
+    if (!hit) {
+      const contains = idx.filter((p: any) => p.norm.includes(q) || q.includes(p.norm));
+      if (contains.length === 1) hit = contains[0];
+    }
+    if (hit) return hit;
+  }
+  return null;
+}
+
+/* ================================================================
+   SCHEDULES — team feed + soccer scoreboard fallback.
+   ESPN's soccer team-schedule endpoint lies (returns empty even
+   on match days). The league scoreboard feed does not.
+   ============================================================ */
+
+async function espnTeamSchedule(entry: any, teamId: string) {
+  return cached(`espn:teamsched:${entry.key}:${teamId}`, 30 * 60 * 1000, async () => {
     let data = await httpGet(`${ESPN}/${entry.sport}/${entry.league}/teams/${teamId}/schedule`);
     let events = data?.events || [];
     if (!events.length && entry.sport === 'soccer') {
@@ -469,12 +525,57 @@ async function espnGetSchedule(entry: any, teamId: string) {
   });
 }
 
+async function espnSoccerScheduleFromScoreboard(entry: any, teamId: string) {
+  const fmt = (d: Date) => d.toISOString().slice(0, 10).replace(/-/g, '');
+  const now = new Date();
+  const start = fmt(new Date(now.getTime() - 7 * 86400000));
+  const end = fmt(new Date(now.getTime() + 7 * 86400000));
+  return cached(`espn:sbsched:${entry.key}:${teamId}:${start}:${end}`, 30 * 60 * 1000, async () => {
+    const data = await httpGet(`${ESPN}/${entry.sport}/${entry.league}/scoreboard?dates=${start}-${end}&limit=300`);
+    const events = data?.events || [];
+    const out: any[] = [];
+    for (const ev of events) {
+      const comp = ev.competitions?.[0] || {};
+      const competitors = comp.competitors || [];
+      const involves = competitors.some((c: any) => String(c?.team?.id) === String(teamId));
+      if (!involves) continue;
+      const opp = competitors.find((c: any) => String(c?.team?.id) !== String(teamId));
+      out.push({
+        id: ev.id,
+        date: ev.date,
+        dateMs: toMs(ev.date),
+        completed: !!(comp.status?.type?.completed ?? ev.status?.type?.completed),
+        competitionId: comp.id || ev.id,
+        opponentId: opp?.team?.id ? String(opp.team.id) : null,
+        opponentName: String(opp?.team?.displayName || opp?.team?.abbreviation || ev.name || ''),
+      });
+    }
+    return out;
+  });
+}
+
+async function espnGetSchedule(entry: any, teamId: string) {
+  let games: any[] = (await espnTeamSchedule(entry, teamId)) || [];
+  if (entry.sport === 'soccer') {
+    const viaBoard = await espnSoccerScheduleFromScoreboard(entry, teamId);
+    if (viaBoard && viaBoard.length) {
+      const seen = new Set(games.map((g: any) => String(g.id)));
+      for (const g of viaBoard) {
+        if (!seen.has(String(g.id))) games.push(g);
+      }
+    }
+  }
+  return games;
+}
+
 function espnUpcoming(schedule: any[]) {
   const nowMs = Date.now();
   return (schedule || [])
     .filter(g => !g.completed && g.dateMs && g.dateMs > nowMs - 12 * 3600 * 1000)
     .sort((a, b) => a.dateMs - b.dateMs);
 }
+
+/* ============ STATS — dual source ============ */
 
 function detectChronological(rows: any[][]): boolean {
   const monthOf = (v: any): any => {
@@ -511,8 +612,12 @@ async function espnGetStatsFromGamelog(entry: any, athleteId: string, statKey: s
     for (const st of root.seasonTypes) for (const c of (st.categories || [])) cats.push(c);
     if (!cats.length) return null;
 
+    const catName = (c: any) => String(c.name || c.displayName || '').toLowerCase();
+    const preferred = def.cats ? cats.filter(c => def.cats.some(h => catName(c).includes(h))) : cats;
+    const searchCats = preferred.length ? preferred : cats;
+
     let rows: any[] | null = null, statCol = -1;
-    for (const c of cats) {
+    for (const c of searchCats) {
       if (!Array.isArray(c.rows) || !c.rows.length) continue;
       const labels = (c.displayNames || c.colNames || c.labels || []).map((x: any) => String(x).toLowerCase());
       if (!labels.length) continue;
@@ -604,6 +709,8 @@ async function espnGetPlayerStats(entry: any, teamId: string, athleteId: string,
   return null;
 }
 
+/* ============ SEARCH (fast path, kept — flaky but cheap) ============ */
+
 async function espnSearchPlayer(query: string): Promise<any[]> {
   return cached(`espn:search:${query.toLowerCase()}`, 60 * 60 * 1000, async () => {
     const data = await httpGet(`https://site.web.api.espn.com/apis/search/v2?query=${encodeURIComponent(query)}&limit=10`);
@@ -625,42 +732,26 @@ async function espnSearchPlayer(query: string): Promise<any[]> {
       const athleteId = idM[1];
       const slugM = href.match(/espn\.com\/([a-z0-9.]+)\//i);
       const slug = slugM ? slugM[1].toLowerCase() : '';
-      const entry = REGISTRY.find(e => slug === e.league || slug === e.key);
-      if (entry) out.push({ entry, athleteId, name: text });
+      const direct = REGISTRY.find(e => slug === e.league || slug === e.key);
+      if (direct) { out.push({ entry: direct, athleteId, name: text }); continue; }
+      if (slug === 'soccer') {
+        const hay = `${r?.subType || ''} ${r?.description || ''} ${text}`.toLowerCase();
+        const sniffed =
+          hay.includes('mls') ? REGISTRY.find(e => e.key === 'mls') :
+          (hay.includes('premier') || hay.includes('epl')) ? REGISTRY.find(e => e.key === 'epl') :
+          (hay.includes('la liga') || hay.includes('laliga')) ? REGISTRY.find(e => e.key === 'laliga') :
+          hay.includes('serie') ? REGISTRY.find(e => e.key === 'seriea') :
+          hay.includes('bundes') ? REGISTRY.find(e => e.key === 'bundesliga') :
+          hay.includes('ligue') ? REGISTRY.find(e => e.key === 'ligue1') : null;
+        if (sniffed) out.push({ entry: sniffed, athleteId, name: text });
+      }
     }
     return out;
   });
 }
 
-async function espnRosterLookup(playerQuery: string, entries: any[]) {
-  const q = deaccent(playerQuery);
-  if (!q) return null;
-  for (const entry of entries) {
-    const teams = await espnGetTeams(entry);
-    for (const t of (teams || []).slice(0, 40)) {
-      const roster = await httpGet(`${ESPN}/${entry.sport}/${entry.league}/teams/${t.id}/roster`, 6000);
-      const athletes = roster?.team?.athletes || roster?.athletes || [];
-      for (const a of athletes) {
-        const norm = deaccent(a?.displayName || a?.fullName || '');
-        if (!norm) continue;
-        if (norm === q || norm.includes(q) || q.includes(norm)) {
-          return {
-            id: String(a.id),
-            name: String(a.displayName || a.fullName),
-            pos: String(a.position?.abbreviation || ''),
-            team: t.abbr.toUpperCase(),
-            teamId: t.id,
-            league: entry.label,
-            entry,
-          };
-        }
-      }
-    }
-  }
-  return null;
-}
-
 /* ============ HELPERS ============ */
+
 function statFromQueryText(query: string, kind: string | null): string {
   const q = ` ${query.toLowerCase()} `;
   const found = new Set<string>();
@@ -678,9 +769,8 @@ function statFromQueryText(query: string, kind: string | null): string {
   return 'points';
 }
 
-/* ============ COMBAT — UFC + BOXING ============
-   Fight verification scans BOTH ESPN combat scoreboards.
-   A boxer on an upcoming card returns the verified bout. */
+/* ============ COMBAT — UFC + BOXING ============ */
+
 const COMBAT_SOURCES = [
   { path: 'mma/ufc', label: 'UFC' },
   { path: 'boxing', label: 'BOXING' },
@@ -705,7 +795,7 @@ async function scanCombatCards() {
       const range = await httpGet(`${ESPN}/${src.path}/scoreboard?dates=${start}-${end}`);
       (range?.events || []).forEach(e => events.push(e));
       if (!events.length) {
-        for (let i = 0; i < 14; i += 2) { // every other day to keep call count sane
+        for (let i = 0; i < 14; i += 2) {
           const d = await httpGet(`${ESPN}/${src.path}/scoreboard?dates=${fmt(new Date(today.getTime() + i * 86400000))}`);
           (d?.events || []).forEach(e => events.push(e));
         }
@@ -753,6 +843,7 @@ async function matchFight(fighterQuery: string, opponentQuery: string | null) {
 }
 
 /* ============ PROMPTS ============ */
+
 const VALID_STAT_KEYS = ALL_STATS.map(s => s.key).join(', ');
 
 const EXTRACT_SYS = `You extract components from a sports prop query. You do NOT generate statistics or facts. Respond with ONLY valid JSON:
@@ -803,8 +894,8 @@ export async function POST(req: NextRequest) {
     const direction = /UNDER/i.test(String(ex.direction)) ? 'UNDER' : (/OVER/i.test(String(ex.direction)) ? 'OVER' : 'NONE');
     const playerName = String(ex.player || '').trim();
 
-    /* 2 — ROUTE DECISION (word-boundary MLB — fixed) */
-    const mlbSignal = isMLBQuery(prop, null);
+    /* 2 — ROUTE DECISION */
+    const mlbSignal = isMLBQuery(prop);
     let mlbTeamMatch: any = null;
     if (ex.opponent) mlbTeamMatch = await mlbMatchTeam(String(ex.opponent));
     const isMLB = mlbSignal || !!mlbTeamMatch;
@@ -910,7 +1001,8 @@ export async function POST(req: NextRequest) {
       // fall through to ESPN — even for baseball-signaled queries
     }
 
-    /* 3 — ESPN PATH (stat-ordered, full backstop) */
+    /* 3 — RESOLUTION: search (fast) → league index (deterministic) → opponent roster → combat */
+
     let player: any = null, entry: any = null;
 
     // 3a — NBA: Balldontlie resolution boost
@@ -927,7 +1019,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 3b — ESPN search + direct athlete resolve
+    // 3b — ESPN search (fast path — 1 call; works when it works)
     if (!player) {
       const searchHits = await espnSearchPlayer(playerName);
       dbg.push(`search:${searchHits.length}`);
@@ -959,7 +1051,26 @@ export async function POST(req: NextRequest) {
       if (player) dbg.push('espn:search-direct');
     }
 
-    // 3c — Opponent-league roster check
+    // 3c — THE DETERMINISTIC BACKSTOP: stat-ordered league roster index.
+    // Search returned 0 for Mahomes? The Chiefs roster still has him.
+    if (!player) {
+      const provisionalStat = statFromQueryText(prop, null);
+      const kinds = new Set(
+        Object.entries(KIND_STATS)
+          .filter(([, arr]) => (arr as StatDef[]).some(s => s.key === provisionalStat))
+          .map(([k]) => k)
+      );
+      const scoreOf = (e: any) => (kinds.has(e.kind) ? 0 : 10) + (e.kind === 'basketball' ? -1 : 0);
+      const ordered = [...REGISTRY.filter(e => !e.useMLB)].sort((a, b) => scoreOf(a) - scoreOf(b));
+      const found = await espnIndexLookup(playerName, ordered.slice(0, 3));
+      if (found) {
+        player = { id: found.id, name: found.name, pos: found.pos, team: found.team, teamId: found.teamId };
+        entry = found.entry;
+        dbg.push(`espn:idx-${found.league}`);
+      }
+    }
+
+    // 3d — Opponent-league roster quick check
     if (!player && ex.opponent) {
       for (const e of REGISTRY) {
         if (e.useMLB) continue;
@@ -969,12 +1080,12 @@ export async function POST(req: NextRequest) {
           const roster = await httpGet(`${ESPN}/${e.sport}/${e.league}/teams/${team.id}/roster`);
           const athletes = roster?.team?.athletes || roster?.athletes || [];
           const q = deaccent(playerName);
-          const found = athletes.find(a => {
+          const hit = athletes.find(a => {
             const n = deaccent(a?.displayName || a?.fullName || '');
             return n && (n === q || n.includes(q) || q.includes(n));
           });
-          if (found) {
-            player = { id: String(found.id), name: String(found.displayName || found.fullName), pos: String(found.position?.abbreviation || ''), team: team.abbr.toUpperCase(), teamId: team.id };
+          if (hit) {
+            player = { id: String(hit.id), name: String(hit.displayName || hit.fullName), pos: String(hit.position?.abbreviation || ''), team: team.abbr.toUpperCase(), teamId: team.id };
             entry = e;
             break;
           }
@@ -983,44 +1094,16 @@ export async function POST(req: NextRequest) {
       if (player) dbg.push('espn:opp-roster');
     }
 
-    // 3d — FIXED: full stat-ordered blind scan — the backstop that catches
-    // Mahomes when search returns 0. NFL is tried FIRST for football stats.
-    if (!player) {
-      const provisionalStat = statFromQueryText(prop, null);
-      const kinds = new Set(
-        Object.entries(KIND_STATS)
-          .filter(([, arr]) => (arr as StatDef[]).some(s => s.key === provisionalStat))
-          .map(([k]) => k)
-      );
-      // Prefer leagues whose KIND matches the stat; then basketball; then the rest
-      const ordered = [...REGISTRY.filter(e => !e.useMLB)].sort((a, b) => {
-        const aScore = (kinds.has(a.kind) ? 0 : 10) + (a.kind === 'basketball' ? 1 : 0);
-        const bScore = (kinds.has(b.kind) ? 0 : 10) + (b.kind === 'basketball' ? 1 : 0);
-        return aScore - bScore;
-      });
-      player = await espnRosterLookup(playerName, ordered.slice(0, 4));
-      if (player) { entry = player.entry; dbg.push('espn:blind-roster'); }
-    }
-
-    // 3e — COMBAT MODE: UFC + BOXING card verification
+    // 3e — COMBAT: UFC + boxing cards
     if (!player) {
       const fight = await matchFight(playerName, ex.opponent || null);
       if (fight) {
-        const isMismatch = !!fight.mismatch;
         return NextResponse.json({
           status: 'fight_found',
-          message: isMismatch
+          message: fight.mismatch
             ? `${fight.fighter} is scheduled to face ${fight.opponent} at ${fight.event} on ${fmtDate(fight.date)} — not the queried opponent.`
             : `VERIFIED: ${fight.fighter} vs ${fight.opponent} at ${fight.event} on ${fmtDate(fight.date)}. Fight matchups verify the bout only — no stat lines graded for combat sports. Nothing was invented.`,
-          facts: {
-            fighter: fight.fighter,
-            next_fight: {
-              opponent: fight.opponent,
-              date: fmtDate(fight.date),
-              event: fight.event,
-              league: fight.league,
-            },
-          },
+          facts: { fighter: fight.fighter, next_fight: { opponent: fight.opponent, date: fmtDate(fight.date), event: fight.event, league: fight.league } },
         });
       }
       return NextResponse.json({

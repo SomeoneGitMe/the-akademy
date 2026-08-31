@@ -42,15 +42,28 @@ interface VerdictRow {
   status: string;
 }
 
+interface WatchCase {
+  dbId?: string;
+  defendant: string;
+  caseNo: string;
+  court: string;
+  charges: string;
+  custody: string;
+  custodyClass: string;
+  phase: number;
+  next: string;
+  exposure: string;
+}
+
 /* ============ THE WATCHLIST ============ */
 
 const PHASES = ["CHARGED", "ARRAIGNED", "PRE-TRIAL", "TRIAL", "VERDICT", "SENTENCING", "APPEAL"];
 
-const WATCHLIST = [
+/* YG removed — no federal case exists. The record is editor-controlled now. */
+const SEED_WATCH: WatchCase[] = [
   { defendant: "Combs", caseNo: "1:24-CR-00571", court: "S.D.N.Y.", charges: "Transportation for prostitution ×2 · acquitted: RICO, trafficking", custody: "DETAINED", custodyClass: "red", phase: 4, next: "SENTENCING TBD", exposure: "20 YRS MAX" },
   { defendant: "Love & Chan", caseNo: "3:26-MJ-00227", court: "D. ORE.", charges: "Wire fraud · romance-investment scheme · 26 victims · $1.3M", custody: "DETAINED", custodyClass: "red", phase: 0, next: "DETENTION HEARING", exposure: "20 YRS MAX" },
   { defendant: "Banks (Lil Durk)", caseNo: "2:25-CR-00583", court: "C.D. CAL.", charges: "Murder-for-hire conspiracy · use of interstate facilities", custody: "DETAINED", custodyClass: "red", phase: 2, next: "PRE-TRIAL 10.03", exposure: "LIFE MAX" },
-  { defendant: "Jackson (YG)", caseNo: "2:26-CR-00311", court: "C.D. CAL.", charges: "Charges pending · pre-trial proceedings", custody: "OUT ON BAIL", custodyClass: "green", phase: 2, next: "STATUS 09.18", exposure: "TBD" },
   { defendant: "Williams (Pooh Shiesty)", caseNo: "NEW FEDERAL CASE", court: "FEDERAL", charges: "Kidnapping & robbery conspiracy · rearrested Jan 2026", custody: "DETAINED", custodyClass: "red", phase: 0, next: "DETENTION HEARING", exposure: "LIFE MAX" },
   { defendant: "Conway (Yella Beezy)", caseNo: "CAPITAL MURDER", court: "TEXAS", charges: "Capital murder · death-penalty eligible · house arrest", custody: "HOUSE ARREST", custodyClass: "mute", phase: 2, next: "TRIAL DATE TBD", exposure: "DEATH / LWOP" },
   { defendant: "Peterson (Tory Lanez)", caseNo: "UNDER APPEAL", court: "CALIFORNIA", charges: "Assault w/ semiauto firearm ×3 · conviction under appeal", custody: "APPEAL", custodyClass: "mute", phase: 6, next: "APPELLATE BRIEFING", exposure: "10 YRS SERVING" },
@@ -77,7 +90,7 @@ const DECODE_CHIPS = [
   "Superseding Indictment",
 ];
 
-/* ============ THE DOCKET (9 filings) ============ */
+/* ============ THE DOCKET (8 filings — YG entry removed) ============ */
 
 const DOCKET_ENTRIES: DocketEntry[] = [
   {
@@ -162,33 +175,6 @@ const DOCKET_ENTRIES: DocketEntry[] = [
       { label: "THE STRATEGY", text: "Expect the defense to target the emotional spine of the government's case: song lyrics, social media posts, and any gang-association framing. The argument is Rule 403 — the prejudicial sting of that material far outweighs what it actually proves. Separate fights target co-defendant statements and cooperating-witness evidence." },
       { label: "WHY IT MATTERS", text: "Murder-for-hire conspiracy under § 1958 requires proving intent and agreement. The government leans on context — associates, communications, money movement — to build that arc. Every piece of context the defense carves out weakens the arc. If the lyrics and gang narrative come in, the jury hears a story; if they stay out, the jury hears a wire-transfer case." },
       { label: "WHAT'S NEXT", text: "The judge rules from the bench or in writing before jury selection. Watch the government's opposition filing — what they fight hardest to keep in tells you exactly what their trial theory is." },
-    ],
-  },
-  {
-    id: "us-v-jackson-status",
-    date: "07.09",
-    docType: "Status Conference",
-    caseName: "United States v. Jackson (YG)",
-    court: "U.S. District Court · C.D. CAL.",
-    division: "LOS ANGELES",
-    caseNo: "2:26-CR-00311",
-    filed: "JUL 9, 2026",
-    status: "PUBLIC",
-    defendants: ["Keenon Jackson"],
-    pills: ["CHARGES PENDING", "OUT ON BAIL", "PRE-TRIAL"],
-    charges: ["PENDING"],
-    facts: [
-      { label: "Phase", value: "PRE-TRIAL" },
-      { label: "Custody", value: "OUT ON BAIL" },
-      { label: "Next Date", value: "STATUS 09.18" },
-      { label: "Posture", value: "DISCOVERY OPEN" },
-    ],
-    pdf_url: null,
-    decode: [
-      { label: "WHAT THIS IS", text: "A joint status report: both sides tell the judge where the case actually stands — discovery progress, plea discussions, scheduling. Nothing dramatic gets decided. It's the court asking everybody the same question: why isn't this case finished yet?" },
-      { label: "WHERE THINGS STAND", text: "The defendant is out on bail while charges work through pre-trial. Discovery is open — the government is handing over its evidence file — and the absence of a trial date usually means both sides are still feeling out whether this resolves with a plea or a fight." },
-      { label: "HOW TO READ IT", text: "Status conferences are the docket's tell. Frequent continuances mean negotiation. A suddenly accelerated schedule means someone rejected a deal. A quiet case with regular status dates is almost always a case moving toward resolution without a jury." },
-      { label: "WHAT'S NEXT", text: "The September date. If the parties announce a change of plea hearing there, this file closes the way most federal files do — quietly. If they announce trial prep, the calendar starts filling with motions." },
     ],
   },
   {
@@ -371,6 +357,21 @@ const pillClass = (s: string) => {
   return 'mute';
 };
 
+const mapWatchRow = (r: any): WatchCase => ({
+  dbId: r.id,
+  defendant: r.defendant || '',
+  caseNo: r.case_no || '',
+  court: r.court || '',
+  charges: r.charges || '',
+  custody: r.custody || 'DETAINED',
+  custodyClass: ['red', 'green', 'mute'].includes(r.custody_class) ? r.custody_class : 'red',
+  phase: Math.max(0, Math.min(6, Number(r.phase) || 0)),
+  next: r.next_label || '',
+  exposure: r.exposure || '',
+});
+
+const watchKey = (c: WatchCase) => c.dbId || `${c.defendant}-${c.caseNo}`;
+
 /* ============ PAGE ============ */
 
 export default function LegalPage() {
@@ -403,6 +404,22 @@ export default function LegalPage() {
   const [uploadTarget, setUploadTarget] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const docketCardRef = useRef<HTMLElement>(null);
+
+  // Watchlist state
+  const [watch, setWatch] = useState<WatchCase[]>(SEED_WATCH);
+  const [showAddWatch, setShowAddWatch] = useState(false);
+  const [editingWatchId, setEditingWatchId] = useState<string | null>(null);
+  const [savingWatch, setSavingWatch] = useState(false);
+  const [watchError, setWatchError] = useState<string | null>(null);
+  const [wDefendant, setWDefendant] = useState("");
+  const [wCaseNo, setWCaseNo] = useState("");
+  const [wCourt, setWCourt] = useState("");
+  const [wCharges, setWCharges] = useState("");
+  const [wCustody, setWCustody] = useState("DETAINED");
+  const [wClass, setWClass] = useState("red");
+  const [wPhase, setWPhase] = useState("0");
+  const [wNext, setWNext] = useState("");
+  const [wExposure, setWExposure] = useState("");
 
   // Ledger state
   const [verdicts, setVerdicts] = useState<VerdictRow[]>(SEED_VERDICTS);
@@ -484,21 +501,49 @@ export default function LegalPage() {
     } catch (e) { /* keep seed */ }
   }, []);
 
+  const fetchWatch = useCallback(async () => {
+    try {
+      const { data, error: dbErr } = await supabaseBrowser.from('watchlist').select('*').order('created_at', { ascending: true });
+      if (!dbErr && data && data.length > 0) setWatch(data.map(mapWatchRow));
+    } catch (e) { /* keep seed */ }
+  }, []);
+
+  const seedIfEmpty = useCallback(async () => {
+    try {
+      const { count: watchCount } = await supabaseBrowser.from('watchlist').select('*', { count: 'exact', head: true });
+      if (watchCount === 0) {
+        await supabaseBrowser.from('watchlist').insert(SEED_WATCH.map(c => ({
+          defendant: c.defendant, case_no: c.caseNo, court: c.court, charges: c.charges,
+          custody: c.custody, custody_class: c.custodyClass, phase: c.phase,
+          next_label: c.next, exposure: c.exposure,
+        })));
+      }
+      const { count: verdictCount } = await supabaseBrowser.from('verdicts').select('*', { count: 'exact', head: true });
+      if (verdictCount === 0) {
+        await supabaseBrowser.from('verdicts').insert(SEED_VERDICTS.map(v => ({
+          name: v.name, charge: v.charge, max_faced: v.max, received: v.received, date_label: v.date, status: v.status,
+        })));
+      }
+    } catch (e) { /* ignore */ }
+  }, []);
+
   useEffect(() => {
     const checkRole = async () => {
       try {
         const { data: { session } } = await supabaseBrowser.auth.getSession();
-        if (!session) { fetchLedger(); return; }
+        if (!session) { fetchLedger(); fetchWatch(); return; }
         const { data: profile } = await supabaseBrowser.from('profiles').select('role').eq('id', session.user.id).single();
-        if (profile && (profile.role === 'admin' || profile.role === 'editor')) setUserRole(profile.role);
+        if (profile && (profile.role === 'admin' || profile.role === 'editor')) {
+          setUserRole(profile.role);
+          await seedIfEmpty();
+        }
       } catch (e) { /* anon */ }
       fetchLedger();
+      fetchWatch();
     };
     checkRole();
-  }, [fetchLedger]);
+  }, [fetchLedger, fetchWatch, seedIfEmpty]);
 
-  // FIXED: version stamps from each file's own updated_at — the browser cache
-  // invalidates only for files that actually changed, so replacements always show
   const loadPdfMap = useCallback(async () => {
     try {
       const { data } = await supabaseBrowser.storage.from('docket').list();
@@ -554,8 +599,6 @@ export default function LegalPage() {
     fileInputRef.current?.click();
   };
 
-  // FIXED: remove-then-upload — upsert is unreliable under storage RLS,
-  // which is why replacements silently failed before
   const handleUpload = async (entryId: string, file: File) => {
     if (!file) return;
     const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
@@ -615,7 +658,66 @@ export default function LegalPage() {
     runDecode(topicInput);
   };
 
-  // Ledger CRUD
+  // ===== WATCHLIST CRUD =====
+  const resetWatchForm = () => {
+    setWDefendant(""); setWCaseNo(""); setWCourt(""); setWCharges("");
+    setWCustody("DETAINED"); setWClass("red"); setWPhase("0");
+    setWNext(""); setWExposure("");
+    setShowAddWatch(false); setEditingWatchId(null); setWatchError(null);
+  };
+
+  const handleSaveWatch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!wDefendant.trim() || !wCharges.trim()) {
+      setWatchError("Defendant and charges are required.");
+      return;
+    }
+    setSavingWatch(true); setWatchError(null);
+    try {
+      const payload = {
+        defendant: wDefendant.trim(),
+        case_no: wCaseNo.trim() || '—',
+        court: wCourt.trim() || '—',
+        charges: wCharges.trim(),
+        custody: wCustody.trim() || 'DETAINED',
+        custody_class: wClass,
+        phase: Math.max(0, Math.min(6, parseInt(wPhase, 10) || 0)),
+        next_label: wNext.trim() || '—',
+        exposure: wExposure.trim() || 'TBD',
+      };
+      if (editingWatchId) {
+        const { error: upErr } = await supabaseBrowser.from('watchlist').update(payload).eq('id', editingWatchId);
+        if (upErr) throw new Error(upErr.message);
+        setWatch(prev => prev.map(c => watchKey(c) === editingWatchId ? { ...c, ...payload, dbId: c.dbId } : c));
+      } else {
+        const { data, error: insErr } = await supabaseBrowser.from('watchlist').insert(payload).select().single();
+        if (insErr) throw new Error(insErr.message);
+        setWatch(prev => [...prev, mapWatchRow(data)]);
+      }
+      resetWatchForm();
+    } catch (err: any) {
+      setWatchError("Save failed — run SQL 13 and check the watchlist table.");
+    }
+    setSavingWatch(false);
+  };
+
+  const startEditWatch = (c: WatchCase) => {
+    setEditingWatchId(watchKey(c));
+    setWDefendant(c.defendant); setWCaseNo(c.caseNo); setWCourt(c.court);
+    setWCharges(c.charges); setWCustody(c.custody); setWClass(c.custodyClass);
+    setWPhase(String(c.phase)); setWNext(c.next); setWExposure(c.exposure);
+    setShowAddWatch(false); setWatchError(null);
+  };
+
+  const handleDeleteWatch = async (c: WatchCase) => {
+    if (!c.dbId) return;
+    try {
+      await supabaseBrowser.from('watchlist').delete().eq('id', c.dbId);
+      setWatch(prev => prev.filter(x => x.dbId !== c.dbId));
+    } catch (e) { /* no-op */ }
+  };
+
+  // ===== LEDGER CRUD =====
   const handleAddVerdict = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!vName.trim() || !vCharge.trim() || !vReceived.trim()) {
@@ -710,6 +812,8 @@ export default function LegalPage() {
   const showTabs = activeDoc && (activePdf || userRole);
   const pdfCount = Object.keys(pdfMap).length;
 
+  const watchFormOpen = userRole && (showAddWatch || editingWatchId);
+
   return (
     <div className="min-h-screen bg-zinc-950 text-white flex flex-col">
       <SiteNav activePage="Legal" />
@@ -731,7 +835,6 @@ export default function LegalPage() {
 
         .shell { max-width: 1400px; margin: 0 auto; padding: 64px 32px 80px; }
 
-        /* ===== PAGE HEAD ===== */
         .page-head { margin-bottom: 64px; display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 1px solid var(--line); padding-bottom: 32px; }
         .page-head__left { flex: 1; }
         .page-head__num { font-family: monospace; font-size: 12px; letter-spacing: 0.2em; color: var(--accent); margin-bottom: 12px; display: block; }
@@ -739,7 +842,6 @@ export default function LegalPage() {
         .page-head__title em { font-style: italic; font-weight: 400; color: var(--accent); }
         .page-head__right { text-align: right; font-family: 'Times New Roman', serif; font-style: italic; font-size: 16px; color: var(--text-soft); max-width: 400px; }
 
-        /* ===== SECTION HEAD ===== */
         .section-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 32px; border-bottom: 1px solid var(--accent); padding-bottom: 12px; }
         .section-head__left { display: flex; align-items: baseline; gap: 16px; }
         .section-head__num { font-family: monospace; font-size: 11px; letter-spacing: 0.2em; color: var(--accent); }
@@ -757,11 +859,17 @@ export default function LegalPage() {
         .watch-card__name { font-family: 'Times New Roman', serif; font-size: 24px; font-weight: 700; line-height: 1.15; }
         .watch-card__name em { font-style: italic; font-weight: 400; }
         .watch-card__charges { font-family: 'Times New Roman', serif; font-style: italic; color: var(--text-soft); font-size: 14px; line-height: 1.5; }
-        .watch-card__meta { font-family: monospace; font-size: 9px; letter-spacing: 0.14em; color: var(--text-mute); text-transform: uppercase; display: flex; gap: 20px; }
+        .watch-card__meta { font-family: monospace; font-size: 9px; letter-spacing: 0.14em; color: var(--text-mute); text-transform: uppercase; display: flex; gap: 20px; flex-wrap: wrap; }
         .watch-card__meta strong { color: var(--text-soft); font-weight: 500; }
         .custody-pill { font-family: monospace; font-size: 8px; letter-spacing: 0.16em; text-transform: uppercase; padding: 4px 8px; border: 1px solid var(--line); color: var(--text-soft); white-space: nowrap; flex-shrink: 0; }
         .custody-pill.red { color: var(--red); border-color: var(--red); }
         .custody-pill.green { color: var(--green); border-color: var(--green); }
+
+        .watch-card__tools { display: flex; gap: 8px; opacity: 0; transition: opacity .3s; flex-shrink: 0; }
+        .watch-card:hover .watch-card__tools { opacity: 1; }
+        .watch-tool { background: none; border: 1px solid transparent; color: var(--text-mute); width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all .3s; }
+        .watch-tool:hover { color: var(--accent); border-color: var(--accent); }
+        .watch-tool.is-del:hover { color: var(--red); border-color: var(--red); }
 
         .phase-pipe { display: flex; margin: 10px 0 4px; }
         .phase-node { display: flex; flex-direction: column; align-items: center; gap: 7px; flex: 1; position: relative; }
@@ -780,6 +888,27 @@ export default function LegalPage() {
         .watch-card__foot { display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--line-soft); padding-top: 12px; gap: 12px; flex-wrap: wrap; }
         .watch-card__exposure { font-family: monospace; font-size: 9px; letter-spacing: 0.14em; color: var(--text-mute); text-transform: uppercase; }
         .watch-card__next { font-family: monospace; font-size: 9px; letter-spacing: 0.14em; color: var(--accent); text-transform: uppercase; }
+
+        /* ===== CRUD FORMS ===== */
+        .ledger-add-btn { display: inline-flex; align-items: center; gap: 8px; background: transparent; border: 1px solid var(--accent); color: var(--accent); font-family: monospace; font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase; padding: 8px 14px; cursor: pointer; transition: all .3s var(--ease-quiet); }
+        .ledger-add-btn:hover { background: var(--accent); color: #0a0a0a; }
+        .ledger-form { border: 1px solid var(--line); background: var(--bg-elev); padding: 24px; margin-bottom: 28px; display: flex; flex-direction: column; gap: 16px; }
+        .ledger-form__row { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 16px; }
+        .ledger-field { display: flex; flex-direction: column; gap: 6px; }
+        .ledger-field.is-wide { grid-column: 1 / -1; }
+        .ledger-field__label { font-family: monospace; font-size: 8px; letter-spacing: 0.18em; color: var(--accent); text-transform: uppercase; }
+        .ledger-input, .ledger-select, .ledger-textarea { background: var(--bg); border: 1px solid var(--line); color: var(--text); padding: 10px 12px; font-family: 'Times New Roman', serif; font-size: 14px; outline: none; transition: border-color .3s; width: 100%; }
+        .ledger-textarea { font-size: 14px; line-height: 1.6; resize: vertical; min-height: 70px; }
+        .ledger-input:focus, .ledger-select:focus, .ledger-textarea:focus { border-color: var(--accent); }
+        .ledger-select { font-family: monospace; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; }
+        .ledger-select option { background: #131313; color: #fff; }
+        .ledger-input__hint { font-family: monospace; font-size: 7px; letter-spacing: 0.14em; color: var(--text-mute); text-transform: uppercase; }
+        .ledger-form__actions { display: flex; gap: 12px; justify-content: flex-end; align-items: center; flex-wrap: wrap; }
+        .ledger-submit { display: inline-flex; align-items: center; gap: 8px; background: var(--accent); color: #0a0a0a; border: none; font-family: monospace; font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase; font-weight: 700; padding: 10px 18px; cursor: pointer; }
+        .ledger-submit:disabled { opacity: .6; cursor: wait; }
+        .ledger-cancel { background: none; border: 1px solid var(--line); color: var(--text-mute); font-family: monospace; font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase; padding: 10px 18px; cursor: pointer; }
+        .ledger-cancel:hover { border-color: var(--text-soft); color: var(--text-soft); }
+        .ledger-form__error { font-family: monospace; font-size: 9px; letter-spacing: 0.1em; color: var(--red); text-transform: uppercase; }
 
         /* ===== AI CARD ===== */
         .decode-section { margin-bottom: 80px; }
@@ -820,23 +949,6 @@ export default function LegalPage() {
 
         /* ===== THE LEDGER ===== */
         .ledger-section { margin-bottom: 80px; }
-        .ledger-add-btn { display: inline-flex; align-items: center; gap: 8px; background: transparent; border: 1px solid var(--accent); color: var(--accent); font-family: monospace; font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase; padding: 8px 14px; cursor: pointer; transition: all .3s var(--ease-quiet); }
-        .ledger-add-btn:hover { background: var(--accent); color: #0a0a0a; }
-        .ledger-form { border: 1px solid var(--line); background: var(--bg-elev); padding: 24px; margin-bottom: 28px; display: flex; flex-direction: column; gap: 16px; }
-        .ledger-form__row { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 16px; }
-        .ledger-field { display: flex; flex-direction: column; gap: 6px; }
-        .ledger-field__label { font-family: monospace; font-size: 8px; letter-spacing: 0.18em; color: var(--accent); text-transform: uppercase; }
-        .ledger-input, .ledger-select { background: var(--bg); border: 1px solid var(--line); color: var(--text); padding: 10px 12px; font-family: 'Times New Roman', serif; font-size: 14px; outline: none; transition: border-color .3s; width: 100%; }
-        .ledger-input:focus, .ledger-select:focus { border-color: var(--accent); }
-        .ledger-select { font-family: monospace; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; }
-        .ledger-select option { background: #131313; color: #fff; }
-        .ledger-form__actions { display: flex; gap: 12px; justify-content: flex-end; align-items: center; }
-        .ledger-submit { display: inline-flex; align-items: center; gap: 8px; background: var(--accent); color: #0a0a0a; border: none; font-family: monospace; font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase; font-weight: 700; padding: 10px 18px; cursor: pointer; }
-        .ledger-submit:disabled { opacity: .6; cursor: wait; }
-        .ledger-cancel { background: none; border: 1px solid var(--line); color: var(--text-mute); font-family: monospace; font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase; padding: 10px 18px; cursor: pointer; }
-        .ledger-cancel:hover { border-color: var(--text-soft); color: var(--text-soft); }
-        .ledger-form__error { font-family: monospace; font-size: 9px; letter-spacing: 0.1em; color: var(--red); text-transform: uppercase; }
-
         .ledger-row { display: grid; grid-template-columns: 280px 1fr 160px 180px; gap: 24px; align-items: center; padding: 20px 0; border-bottom: 1px solid var(--line-soft); }
         .ledger-row:hover .ledger-name { color: var(--accent); }
         .ledger-name { font-family: 'Times New Roman', serif; font-size: 19px; font-weight: 700; line-height: 1.2; transition: color .3s; }
@@ -1010,6 +1122,7 @@ export default function LegalPage() {
           .ledger-actual { text-align: left; }
           .ledger-right { justify-content: flex-start; }
           .ledger-icon-btn { opacity: 1; }
+          .watch-card__tools { opacity: 1; }
         }
         @media (max-width: 800px) {
           .doc-modal { padding: 12px; }
@@ -1035,7 +1148,6 @@ export default function LegalPage() {
       `}} />
 
       <div className="shell">
-        {/* ===== PAGE HEAD ===== */}
         <header className="page-head fade-up">
           <div className="page-head__left">
             <span className="page-head__num">04 / THE RECORD</span>
@@ -1050,16 +1162,90 @@ export default function LegalPage() {
             <div className="section-head__left">
               <span className="section-head__num">01</span>
               <h2 className="section-head__title">The <em>Watchlist</em></h2>
-              <Blip text="Every active case in the culture, tracked through the federal pipeline. The lit node shows exactly where each case sits — charged, pre-trial, verdict, or appeal." />
+              <Blip text="Every active case in the culture, tracked through the pipeline. Editor-controlled: add cases, move them through phases, clear the ones that resolve." />
             </div>
-            <span className="section-head__count">{WATCHLIST.length} CASES ACTIVE</span>
+            <div className="section-head__tools">
+              {userRole && !editingWatchId && (
+                <button className="ledger-add-btn" onClick={() => { setShowAddWatch(v => !v); setWatchError(null); }}>
+                  <Plus size={12} /> {showAddWatch ? 'Close' : 'Add Case'}
+                </button>
+              )}
+              <span className="section-head__count">{watch.length} CASES ACTIVE</span>
+            </div>
           </div>
+
+          {watchFormOpen && (
+            <form className="ledger-form" onSubmit={handleSaveWatch}>
+              <div className="ledger-form__row">
+                <div className="ledger-field">
+                  <span className="ledger-field__label">Defendant</span>
+                  <input className="ledger-input" value={wDefendant} onChange={(e) => setWDefendant(e.target.value)} placeholder="Combs" />
+                  <span className="ledger-input__hint">Renders as United States v. {wDefendant || 'Defendant'}</span>
+                </div>
+                <div className="ledger-field">
+                  <span className="ledger-field__label">Case No.</span>
+                  <input className="ledger-input" value={wCaseNo} onChange={(e) => setWCaseNo(e.target.value)} placeholder="1:24-CR-00571" />
+                </div>
+                <div className="ledger-field">
+                  <span className="ledger-field__label">Court</span>
+                  <input className="ledger-input" value={wCourt} onChange={(e) => setWCourt(e.target.value)} placeholder="S.D.N.Y." />
+                </div>
+                <div className="ledger-field">
+                  <span className="ledger-field__label">Phase</span>
+                  <select className="ledger-select" value={wPhase} onChange={(e) => setWPhase(e.target.value)}>
+                    {PHASES.map((p, i) => <option key={p} value={i}>{i} · {p}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className="ledger-form__row">
+                <div className="ledger-field">
+                  <span className="ledger-field__label">Custody Label</span>
+                  <input className="ledger-input" value={wCustody} onChange={(e) => setWCustody(e.target.value)} placeholder="DETAINED" />
+                </div>
+                <div className="ledger-field">
+                  <span className="ledger-field__label">Pill Color</span>
+                  <select className="ledger-select" value={wClass} onChange={(e) => setWClass(e.target.value)}>
+                    <option value="red">CRIMSON · DETAINED</option>
+                    <option value="green">GREEN · RELEASED</option>
+                    <option value="mute">NEUTRAL · OTHER</option>
+                  </select>
+                </div>
+                <div className="ledger-field">
+                  <span className="ledger-field__label">Next Date</span>
+                  <input className="ledger-input" value={wNext} onChange={(e) => setWNext(e.target.value)} placeholder="SENTENCING TBD" />
+                </div>
+                <div className="ledger-field">
+                  <span className="ledger-field__label">Exposure</span>
+                  <input className="ledger-input" value={wExposure} onChange={(e) => setWExposure(e.target.value)} placeholder="LIFE MAX" />
+                </div>
+              </div>
+              <div className="ledger-field is-wide">
+                <span className="ledger-field__label">Charges</span>
+                <input className="ledger-input" value={wCharges} onChange={(e) => setWCharges(e.target.value)} placeholder="Racketeering conspiracy · sex trafficking" />
+              </div>
+              {watchError && <div className="ledger-form__error">{watchError}</div>}
+              <div className="ledger-form__actions">
+                <button type="button" className="ledger-cancel" onClick={resetWatchForm}>Cancel</button>
+                <button type="submit" className="ledger-submit" disabled={savingWatch}>
+                  {savingWatch ? <Loader2 size={12} className="animate-spin" /> : null}
+                  {savingWatch ? 'Filing...' : editingWatchId ? 'Save Changes' : 'Add to the Watchlist'}
+                </button>
+              </div>
+            </form>
+          )}
+
           <div className="watchlist-grid">
-            {WATCHLIST.map((c, i) => (
-              <article className="watch-card" key={i}>
+            {watch.map(c => (
+              <article className="watch-card" key={watchKey(c)}>
                 <div className="watch-card__rail">
                   <span className={`custody-pill ${c.custodyClass}`}>{c.custody}</span>
                   <span className="watch-card__next">{c.next}</span>
+                  {userRole && c.dbId && (
+                    <div className="watch-card__tools">
+                      <button className="watch-tool" onClick={() => startEditWatch(c)} aria-label="Edit case"><Pencil size={11} /></button>
+                      <button className="watch-tool is-del" onClick={() => handleDeleteWatch(c)} aria-label="Delete case"><X size={11} /></button>
+                    </div>
+                  )}
                 </div>
                 <div className="watch-card__id">
                   <h3 className="watch-card__name">United States v. <em>{c.defendant}</em></h3>
@@ -1160,8 +1346,8 @@ export default function LegalPage() {
               <Blip text="The sentencing scoreboard. The bar shows what fraction of the maximum each sentence actually was — time faced versus time given." />
             </div>
             <div className="section-head__tools">
-              {userRole && (
-                <button className="ledger-add-btn" onClick={() => { setShowAddVerdict(v => !v); setEditingId(null); setVerdictError(null); }}>
+              {userRole && !editingId && (
+                <button className="ledger-add-btn" onClick={() => { setShowAddVerdict(v => !v); setVerdictError(null); }}>
                   <Plus size={12} /> {showAddVerdict ? 'Close' : 'Add Entry'}
                 </button>
               )}
@@ -1169,7 +1355,7 @@ export default function LegalPage() {
             </div>
           </div>
 
-          {userRole && showAddVerdict && (
+          {userRole && showAddVerdict && !editingId && (
             <form className="ledger-form" onSubmit={handleAddVerdict}>
               <div className="ledger-form__row">
                 <div className="ledger-field">
